@@ -24,6 +24,8 @@ const targets = [];
 // Mouse controls
 let mouseBlaster = null;
 let isMouseMode = false;
+const mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
 
 let score = 0;
 const scoreText = new Text();
@@ -118,6 +120,12 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 	});
 
 	// Setup mouse controls
+	window.addEventListener('mousemove', (event) => {
+		// Normalize mouse coordinates to -1 to +1
+		mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+	});
+
 	window.addEventListener('click', (event) => {
 		if (!isMouseMode && mouseBlaster) {
 			// Switch to mouse mode and add blaster to camera
@@ -126,13 +134,25 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 		}
 		
 		if (isMouseMode && mouseBlaster) {
-			// Fire bullet from mouse blaster position
-			const blasterWorldPosition = new THREE.Vector3();
-			const blasterWorldQuaternion = new THREE.Quaternion();
-			mouseBlaster.getWorldPosition(blasterWorldPosition);
-			mouseBlaster.getWorldQuaternion(blasterWorldQuaternion);
+			// Calculate direction from blaster to mouse cursor
+			raycaster.setFromCamera(mouse, camera);
+			const targetPoint = new THREE.Vector3();
+			raycaster.ray.at(10, targetPoint); // Project 10 units forward
 			
-			fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
+			// Get blaster world position
+			const blasterWorldPosition = new THREE.Vector3();
+			mouseBlaster.getWorldPosition(blasterWorldPosition);
+			
+			// Calculate direction vector from blaster to target point
+			const direction = targetPoint.clone().sub(blasterWorldPosition).normalize();
+			
+			// Create quaternion from direction
+			const quaternion = new THREE.Quaternion();
+			const matrix = new THREE.Matrix4();
+			matrix.lookAt(blasterWorldPosition, targetPoint, camera.up);
+			quaternion.setFromRotationMatrix(matrix);
+			
+			fireBullet(scene, blasterWorldPosition, quaternion);
 		}
 	});
 }
