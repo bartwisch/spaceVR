@@ -21,6 +21,10 @@ const bulletTimeToLive = 1;
 const blasterGroup = new THREE.Group();
 const targets = [];
 
+// Mouse controls
+let mouseBlaster = null;
+let isMouseMode = false;
+
 let score = 0;
 const scoreText = new Text();
 scoreText.fontSize = 0.52;
@@ -39,6 +43,29 @@ function updateScoreDisplay() {
 	scoreText.sync();
 }
 
+function fireBullet(scene, position, quaternion) {
+	// Play laser sound
+	if (laserSound.isPlaying) laserSound.stop();
+	laserSound.play();
+
+	const bulletPrototype = blasterGroup.getObjectByName('bullet');
+	if (bulletPrototype) {
+		const bullet = bulletPrototype.clone();
+		scene.add(bullet);
+		bullet.position.copy(position);
+		bullet.quaternion.copy(quaternion);
+
+		const directionVector = forwardVector
+			.clone()
+			.applyQuaternion(bullet.quaternion);
+		bullet.userData = {
+			velocity: directionVector.multiplyScalar(bulletSpeed),
+			timeToLive: bulletTimeToLive,
+		};
+		bullets[bullet.uuid] = bullet;
+	}
+}
+
 function setupScene({ scene, camera, renderer, player, controllers }) {
 	const gltfLoader = new GLTFLoader();
 
@@ -48,6 +75,11 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 
 	gltfLoader.load('assets/blaster.glb', (gltf) => {
 		blasterGroup.add(gltf.scene);
+		
+		// Create mouse blaster for non-VR mode
+		mouseBlaster = gltf.scene.clone();
+		mouseBlaster.position.set(0.3, -0.3, -0.5);
+		mouseBlaster.scale.setScalar(0.8);
 	});
 
 	gltfLoader.load('assets/target.glb', (gltf) => {
@@ -84,6 +116,25 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 		scoreSound.setBuffer(buffer);
 		scoreText.add(scoreSound);
 	});
+
+	// Setup mouse controls
+	window.addEventListener('click', (event) => {
+		if (!isMouseMode && mouseBlaster) {
+			// Switch to mouse mode and add blaster to camera
+			isMouseMode = true;
+			camera.add(mouseBlaster);
+		}
+		
+		if (isMouseMode && mouseBlaster) {
+			// Fire bullet from mouse blaster position
+			const blasterWorldPosition = new THREE.Vector3();
+			const blasterWorldQuaternion = new THREE.Quaternion();
+			mouseBlaster.getWorldPosition(blasterWorldPosition);
+			mouseBlaster.getWorldQuaternion(blasterWorldQuaternion);
+			
+			fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
+		}
+	});
 }
 
 function onFrame(
@@ -91,7 +142,16 @@ function onFrame(
 	time,
 	{ scene, camera, renderer, player, controllers },
 ) {
-	if (controllers.right) {
+	// Check if we're in VR mode or mouse mode
+	const isInVR = controllers.right && controllers.right.gamepad;
+	
+	if (isInVR) {
+		// VR Mode - hide mouse blaster if it's visible
+		if (isMouseMode && mouseBlaster && mouseBlaster.parent === camera) {
+			camera.remove(mouseBlaster);
+			isMouseMode = false;
+		}
+		
 		const { gamepad, raySpace, mesh } = controllers.right;
 		if (!raySpace.children.includes(blasterGroup)) {
 			raySpace.add(blasterGroup);
@@ -104,26 +164,18 @@ function onFrame(
 				// do nothing
 			}
 
-			// Play laser sound
-			if (laserSound.isPlaying) laserSound.stop();
-			laserSound.play();
-
-			const bulletPrototype = blasterGroup.getObjectByName('bullet');
-			if (bulletPrototype) {
-				const bullet = bulletPrototype.clone();
-				scene.add(bullet);
-				bulletPrototype.getWorldPosition(bullet.position);
-				bulletPrototype.getWorldQuaternion(bullet.quaternion);
-
-				const directionVector = forwardVector
-					.clone()
-					.applyQuaternion(bullet.quaternion);
-				bullet.userData = {
-					velocity: directionVector.multiplyScalar(bulletSpeed),
-					timeToLive: bulletTimeToLive,
-				};
-				bullets[bullet.uuid] = bullet;
-			}
+			const blasterWorldPosition = new THREE.Vector3();
+			const blasterWorldQuaternion = new THREE.Quaternion();
+			blasterGroup.getWorldPosition(blasterWorldPosition);
+			blasterGroup.getWorldQuaternion(blasterWorldQuaternion);
+			
+			fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
+		}
+	} else {
+		// Non-VR Mode - show mouse blaster if not already visible
+		if (!isMouseMode && mouseBlaster && mouseBlaster.parent !== camera) {
+			camera.add(mouseBlaster);
+			isMouseMode = true;
 		}
 	}
 
