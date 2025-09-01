@@ -79,32 +79,48 @@ function spawnCowboy(scene) {
 	// Setup animation mixer for this cowboy
 	if (cowboyGltf.animations && cowboyGltf.animations.length > 0) {
 		const mixer = new THREE.AnimationMixer(cowboy);
-		cowboyMixers.push(mixer);
+		const cowboyData = {
+			mixer: mixer,
+			animations: cowboyGltf.animations,
+			currentAction: null
+		};
+		cowboyMixers.push(cowboyData);
 		
 		console.log('Setting up animations, found:', cowboyGltf.animations.length, 'animations');
 		
 		// Find and play wink animation (or first available animation)
-		let winkAction = null;
+		let idleAction = null;
+		let deathAction = null;
+		
 		for (let animation of cowboyGltf.animations) {
-			if (animation.name.toLowerCase().includes('wink') || 
-				animation.name.toLowerCase().includes('wave') ||
-				animation.name.toLowerCase().includes('greeting')) {
-				winkAction = mixer.clipAction(animation);
-				break;
+			const animName = animation.name.toLowerCase();
+			if (animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
+				idleAction = mixer.clipAction(animation);
+			} else if (animName.includes('dead')) {
+				deathAction = mixer.clipAction(animation);
 			}
 		}
 		
-		// If no wink animation found, use first animation
-		if (!winkAction && cowboyGltf.animations.length > 0) {
-			winkAction = mixer.clipAction(cowboyGltf.animations[0]);
-			console.log('Using first animation:', cowboyGltf.animations[0].name);
+		// If no specific animations found, use first animation as idle
+		if (!idleAction && cowboyGltf.animations.length > 0) {
+			idleAction = mixer.clipAction(cowboyGltf.animations[0]);
+			console.log('Using first animation as idle:', cowboyGltf.animations[0].name);
 		}
 		
-		if (winkAction) {
-			winkAction.setLoop(THREE.LoopRepeat, Infinity);
-			winkAction.play();
-			console.log('Animation started');
+		if (idleAction) {
+			idleAction.setLoop(THREE.LoopRepeat, Infinity);
+			idleAction.play();
+			cowboyData.currentAction = idleAction;
+			console.log('Idle animation started');
 		}
+		
+		// Store death animation reference
+		cowboy.userData = {
+			idleAction: idleAction,
+			deathAction: deathAction,
+			hasPlayedDeath: false
+		};
+		
 	} else {
 		console.log('No animations found for cowboy');
 	}
@@ -229,6 +245,17 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 			fireBullet(scene, blasterWorldPosition, quaternion);
 		}
 	});
+}
+
+function checkAndSpawnCowboys(scene) {
+	// Only spawn new cowboys when all dead cowboys have been removed
+	// and we have less than 3 cowboys
+	if (cowboys.length < 3) {
+		console.log('Spawning new cowboy to maintain count');
+		spawnCowboy(scene);
+	} else {
+		console.log('Not spawning new cowboy - already have 3 or more');
+	}
 }
 
 function onFrame(
@@ -356,33 +383,64 @@ function onFrame(
 					console.log('Bullet position:', bullet.position);
 					console.log('Cowboys array length before removal:', cowboys.length);
 					bulletHit = true;
-					console.log('Removing bullet from bullets object and scene');
-					delete bullets[bullet.uuid];
-					scene.remove(bullet);
-					console.log('Removing cowboy from scene');
-					scene.remove(cowboy);
-					console.log('Removing cowboy from cowboys array at index:', index);
-					cowboys.splice(index, 1);
-					console.log('Cowboys array length after removal:', cowboys.length);
 					
-					// Remove corresponding mixer
-					if (cowboyMixers[index]) {
-						console.log('Removing cowboy mixer at index:', index);
-						cowboyMixers.splice(index, 1);
-					}
-
-					// Spawn new cowboy after a short delay to maintain 3 cowboys
-					console.log('Setting timeout to spawn new cowboy');
-					setTimeout(() => {
-						// Only spawn a new cowboy if we have less than 3
-						console.log('Timeout complete, current cowboys count:', cowboys.length);
-						if (cowboys.length < 3) {
-							console.log('Spawning new cowboy to maintain count');
-							spawnCowboy(scene);
-						} else {
-							console.log('Not spawning new cowboy - already have 3 or more');
+					// Play death animation if available
+					const cowboyData = cowboyMixers[index];
+					if (cowboyData && cowboyData.mixer && cowboy.userData && cowboy.userData.deathAction && !cowboy.userData.hasPlayedDeath) {
+						console.log('Playing death animation in place');
+						cowboy.userData.hasPlayedDeath = true;
+						
+						// Stop current idle animation
+						if (cowboy.userData.idleAction) {
+							cowboy.userData.idleAction.stop();
 						}
-					}, 1000);
+						
+						// Play death animation
+						const deathAction = cowboy.userData.deathAction;
+						deathAction.setLoop(THREE.LoopOnce, 1);
+						deathAction.clampWhenFinished = true;
+						deathAction.play();
+						
+						// Remove bullet but keep cowboy visible during death animation
+						console.log('Removing bullet from bullets object and scene');
+						delete bullets[bullet.uuid];
+						scene.remove(bullet);
+						
+						// After death animation completes, remove cowboy
+						setTimeout(() => {
+							console.log('Death animation complete, removing cowboy from scene');
+							scene.remove(cowboy);
+							cowboys.splice(index, 1);
+							console.log('Cowboys array length after removal:', cowboys.length);
+							
+							// Remove corresponding mixer data
+							if (cowboyMixers[index]) {
+								cowboyMixers.splice(index, 1);
+							}
+
+							// Check if we need to spawn a new cowboy
+							checkAndSpawnCowboys(scene);
+						}, 4000); // Wait 4 seconds total for death animation
+						
+					} else {
+						// No death animation available, remove immediately
+						console.log('No death animation available, removing immediately');
+						console.log('Removing bullet from bullets object and scene');
+						delete bullets[bullet.uuid];
+						scene.remove(bullet);
+						console.log('Removing cowboy from scene');
+						scene.remove(cowboy);
+						cowboys.splice(index, 1);
+						console.log('Cowboys array length after removal:', cowboys.length);
+						
+						// Remove corresponding mixer data
+						if (cowboyMixers[index]) {
+							cowboyMixers.splice(index, 1);
+						}
+
+						// Check if we need to spawn a new cowboy
+						checkAndSpawnCowboys(scene);
+					}
 
 					score += 50;
 					updateScoreDisplay();
@@ -395,8 +453,10 @@ function onFrame(
 	});
 	
 	// Update cowboy animations
-	cowboyMixers.forEach(mixer => {
-		mixer.update(delta);
+	cowboyMixers.forEach(cowboyData => {
+		if (cowboyData.mixer) {
+			cowboyData.mixer.update(delta);
+		}
 	});
 	
 	// Ensure we always have 3 cowboys
