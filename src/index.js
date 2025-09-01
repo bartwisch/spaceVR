@@ -17,8 +17,8 @@ import { init } from './init.js';
 
 const bullets = {};
 const forwardVector = new THREE.Vector3(0, 0, -1);
-const bulletSpeed = 10;
-const bulletTimeToLive = 1;
+const bulletSpeed = 15; // Increased speed
+const bulletTimeToLive = 3; // Increased TTL to 3 seconds
 
 const blasterGroup = new THREE.Group();
 const targets = [];
@@ -275,6 +275,7 @@ function onFrame(
 
 	Object.values(bullets).forEach((bullet) => {
 		if (bullet.userData.timeToLive < 0) {
+			console.log('Bullet TTL expired, removing bullet:', bullet.uuid);
 			delete bullets[bullet.uuid];
 			scene.remove(bullet);
 			return;
@@ -293,28 +294,39 @@ function onFrame(
 					if (bulletHit) return;
 					const distance = target.position.distanceTo(bullet.position);
 					if (distance < 1) {
+						console.log('Target collision detected! Distance:', distance);
+						console.log('Target position:', target.position);
+						console.log('Bullet position:', bullet.position);
 						bulletHit = true;
+						console.log('Removing bullet from bullets object and scene');
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
 
+						console.log('Starting target removal animation');
 						gsap.to(target.scale, {
 							duration: 0.3,
 							x: 0,
 							y: 0,
 							z: 0,
 							onComplete: () => {
+								console.log('Target scale animation complete, hiding target');
 								target.visible = false;
 								setTimeout(() => {
+									console.log('Respawning target');
 									target.visible = true;
 									target.position.x = Math.random() * 10 - 5;
 									target.position.z = -Math.random() * 5 - 5;
 
 									// Scale back up the target
+									console.log('Animating target scale back to normal');
 									gsap.to(target.scale, {
 										duration: 0.3,
 										x: 1,
 										y: 1,
 										z: 1,
+										onComplete: () => {
+											console.log('Target respawn animation complete');
+										}
 									});
 								}, 1000);
 							},
@@ -324,33 +336,51 @@ function onFrame(
 						updateScoreDisplay();
 						if (scoreSound.isPlaying) scoreSound.stop();
 						scoreSound.play();
+						console.log('Target hit processing complete');
 					}
 				});
 		}
 
 		// Check collision with cowboys
-			if (!bulletHit) {
-				cowboys.forEach((cowboy, index) => {
-					if (bulletHit) return;
-					const distance = cowboy.position.distanceTo(bullet.position);
-					// Increased hitbox size for better collision detection
-					if (distance < 2.0) {
+		if (!bulletHit) {
+			cowboys.forEach((cowboy, index) => {
+				if (bulletHit) {
+					console.log('Skipping cowboy check - bullet already hit something');
+					return;
+				}
+				const distance = cowboy.position.distanceTo(bullet.position);
+				// Increased hitbox size for better collision detection
+				if (distance < 2.0) {
+					console.log('Cowboy collision detected! Distance:', distance, 'Index:', index);
+					console.log('Cowboy position:', cowboy.position);
+					console.log('Bullet position:', bullet.position);
+					console.log('Cowboys array length before removal:', cowboys.length);
 					bulletHit = true;
+					console.log('Removing bullet from bullets object and scene');
 					delete bullets[bullet.uuid];
 					scene.remove(bullet);
+					console.log('Removing cowboy from scene');
 					scene.remove(cowboy);
+					console.log('Removing cowboy from cowboys array at index:', index);
 					cowboys.splice(index, 1);
+					console.log('Cowboys array length after removal:', cowboys.length);
 					
 					// Remove corresponding mixer
 					if (cowboyMixers[index]) {
+						console.log('Removing cowboy mixer at index:', index);
 						cowboyMixers.splice(index, 1);
 					}
 
 					// Spawn new cowboy after a short delay to maintain 3 cowboys
+					console.log('Setting timeout to spawn new cowboy');
 					setTimeout(() => {
 						// Only spawn a new cowboy if we have less than 3
+						console.log('Timeout complete, current cowboys count:', cowboys.length);
 						if (cowboys.length < 3) {
+							console.log('Spawning new cowboy to maintain count');
 							spawnCowboy(scene);
+						} else {
+							console.log('Not spawning new cowboy - already have 3 or more');
 						}
 					}, 1000);
 
@@ -358,6 +388,7 @@ function onFrame(
 					updateScoreDisplay();
 					if (scoreSound.isPlaying) scoreSound.stop();
 					scoreSound.play();
+					console.log('Cowboy hit processing complete');
 				}
 			});
 		}
