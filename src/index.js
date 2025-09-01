@@ -165,7 +165,10 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 	// Load cowboy enemy
 	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
 		cowboyGltf = gltf;
-		spawnCowboy(scene);
+		// Spawn 3 cowboys initially
+		for (let i = 0; i < 3; i++) {
+			spawnCowboy(scene);
+		}
 	});
 
 	scene.add(scoreText);
@@ -326,11 +329,12 @@ function onFrame(
 		}
 
 		// Check collision with cowboys
-		if (!bulletHit) {
-			cowboys.forEach((cowboy, index) => {
-				if (bulletHit) return;
-				const distance = cowboy.position.distanceTo(bullet.position);
-				if (distance < 1.5) {
+			if (!bulletHit) {
+				cowboys.forEach((cowboy, index) => {
+					if (bulletHit) return;
+					const distance = cowboy.position.distanceTo(bullet.position);
+					// Increased hitbox size for better collision detection
+					if (distance < 2.0) {
 					bulletHit = true;
 					delete bullets[bullet.uuid];
 					scene.remove(bullet);
@@ -342,9 +346,12 @@ function onFrame(
 						cowboyMixers.splice(index, 1);
 					}
 
-					// Spawn new cowboy after a short delay
+					// Spawn new cowboy after a short delay to maintain 3 cowboys
 					setTimeout(() => {
-						spawnCowboy(scene);
+						// Only spawn a new cowboy if we have less than 3
+						if (cowboys.length < 3) {
+							spawnCowboy(scene);
+						}
 					}, 1000);
 
 					score += 50;
@@ -360,6 +367,11 @@ function onFrame(
 	cowboyMixers.forEach(mixer => {
 		mixer.update(delta);
 	});
+	
+	// Ensure we always have 3 cowboys
+	if (cowboyGltf && cowboys.length < 3) {
+		spawnCowboy(scene);
+	}
 	
 	gsap.ticker.tick(delta);
 }
