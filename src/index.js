@@ -27,6 +27,7 @@ const targets = [];
 const cowboys = [];
 const cowboyMixers = [];
 let cowboyGltf = null;
+let spawnPending = false; // Flag to track if a spawn is already pending
 
 // Mouse controls
 let mouseBlaster = null;
@@ -248,13 +249,18 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 }
 
 function checkAndSpawnCowboys(scene) {
-	// Only spawn new cowboys when all dead cowboys have been removed
-	// and we have less than 3 cowboys
-	if (cowboys.length < 3) {
-		console.log('Spawning new cowboy to maintain count');
-		spawnCowboy(scene);
+	// Only spawn new cowboys when we have less than 3 cowboys
+	// and there isn't already a spawn pending
+	if (cowboys.length < 3 && !spawnPending) {
+		spawnPending = true;
+		console.log('Spawning new cowboy to maintain count, setting spawnPending = true');
+		setTimeout(() => {
+			spawnCowboy(scene);
+			spawnPending = false;
+			console.log('Cowboy spawned, setting spawnPending = false');
+		}, 100); // Small delay to ensure removal is complete
 	} else {
-		console.log('Not spawning new cowboy - already have 3 or more');
+		console.log('Not spawning new cowboy - cowboys.length:', cowboys.length, 'spawnPending:', spawnPending);
 	}
 }
 
@@ -460,8 +466,12 @@ function onFrame(
 	});
 	
 	// Ensure we always have 3 cowboys
-	if (cowboyGltf && cowboys.length < 3) {
-		spawnCowboy(scene);
+	if (cowboyGltf && cowboys.length < 3 && !spawnPending) {
+		spawnPending = true;
+		setTimeout(() => {
+			spawnCowboy(scene);
+			spawnPending = false;
+		}, 100);
 	}
 	
 	gsap.ticker.tick(delta);
