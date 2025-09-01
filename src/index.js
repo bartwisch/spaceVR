@@ -63,8 +63,12 @@ function spawnCowboy(scene) {
 	// Properly clone the GLTF scene with animations using SkeletonUtils
 	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
 	
-	// Set position - start with a fixed visible position for debugging
-	cowboy.position.set(-3, 0, -8);
+	// Set random position like targets
+	cowboy.position.set(
+		Math.random() * 10 - 5,    // Random X: -5 to +5
+		Math.random() * 3,        // Random Y: 0 to +3
+		-Math.random() * 5 - 5    // Random Z: -10 to -5
+	);
 	cowboy.scale.setScalar(1.2);
 	scene.add(cowboy);
 	cowboys.push(cowboy);
