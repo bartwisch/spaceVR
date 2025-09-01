@@ -21,6 +21,10 @@ const bulletTimeToLive = 1;
 const blasterGroup = new THREE.Group();
 const targets = [];
 
+// Cowboy enemies
+const cowboys = [];
+let cowboyMixer = null;
+
 // Mouse controls
 let mouseBlaster = null;
 let isMouseMode = false;
@@ -94,6 +98,41 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 			);
 			scene.add(target);
 			targets.push(target);
+		}
+	});
+
+	// Load cowboy enemy
+	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
+		const cowboy = gltf.scene;
+		cowboy.position.set(-3, 0, -8);
+		cowboy.scale.setScalar(1.2);
+		scene.add(cowboy);
+		cowboys.push(cowboy);
+
+		// Setup animation mixer for cowboy
+		if (gltf.animations && gltf.animations.length > 0) {
+			cowboyMixer = new THREE.AnimationMixer(cowboy);
+			
+			// Find and play wink animation (or first available animation)
+			let winkAction = null;
+			for (let animation of gltf.animations) {
+				if (animation.name.toLowerCase().includes('wink') || 
+					animation.name.toLowerCase().includes('wave') ||
+					animation.name.toLowerCase().includes('greeting')) {
+					winkAction = cowboyMixer.clipAction(animation);
+					break;
+				}
+			}
+			
+			// If no wink animation found, use first animation
+			if (!winkAction && gltf.animations.length > 0) {
+				winkAction = cowboyMixer.clipAction(gltf.animations[0]);
+			}
+			
+			if (winkAction) {
+				winkAction.setLoop(THREE.LoopRepeat, Infinity);
+				winkAction.play();
+			}
 		}
 	});
 
@@ -247,6 +286,12 @@ function onFrame(
 				}
 			});
 	});
+	
+	// Update cowboy animation
+	if (cowboyMixer) {
+		cowboyMixer.update(delta);
+	}
+	
 	gsap.ticker.tick(delta);
 }
 
