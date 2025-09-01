@@ -72,7 +72,7 @@ function fireBullet(scene, position, quaternion) {
 	}
 }
 
-function setupScene({ scene, camera, renderer, player, controllers }) {
+function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 	const gltfLoader = new GLTFLoader();
 
 	gltfLoader.load('assets/spacestation.glb', (gltf) => {
@@ -165,7 +165,7 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 	});
 
-	window.addEventListener('click', (event) => {
+	window.addEventListener('click', (_event) => {
 		if (!isMouseMode && mouseBlaster) {
 			// Switch to mouse mode and add blaster to camera
 			isMouseMode = true;
@@ -183,7 +183,7 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 			mouseBlaster.getWorldPosition(blasterWorldPosition);
 			
 			// Calculate direction vector from blaster to target point
-			const direction = targetPoint.clone().sub(blasterWorldPosition).normalize();
+			const _direction = targetPoint.clone().sub(blasterWorldPosition).normalize();
 			
 			// Create quaternion from direction
 			const quaternion = new THREE.Quaternion();
@@ -198,8 +198,8 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 
 function onFrame(
 	delta,
-	time,
-	{ scene, camera, renderer, player, controllers },
+	_time,
+	{ scene, camera, _renderer, _player, controllers },
 ) {
 	// Check if we're in VR mode or mouse mode
 	const isInVR = controllers.right && controllers.right.gamepad;
@@ -248,43 +248,70 @@ function onFrame(
 		bullet.position.add(deltaVec);
 		bullet.userData.timeToLive -= delta;
 
-		targets
-			.filter((target) => target.visible)
-			.forEach((target) => {
-				const distance = target.position.distanceTo(bullet.position);
-				if (distance < 1) {
+		let bulletHit = false;
+
+		// Check collision with targets
+		if (!bulletHit) {
+			targets
+				.filter((target) => target.visible)
+				.forEach((target) => {
+					if (bulletHit) return;
+					const distance = target.position.distanceTo(bullet.position);
+					if (distance < 1) {
+						bulletHit = true;
+						delete bullets[bullet.uuid];
+						scene.remove(bullet);
+
+						gsap.to(target.scale, {
+							duration: 0.3,
+							x: 0,
+							y: 0,
+							z: 0,
+							onComplete: () => {
+								target.visible = false;
+								setTimeout(() => {
+									target.visible = true;
+									target.position.x = Math.random() * 10 - 5;
+									target.position.z = -Math.random() * 5 - 5;
+
+									// Scale back up the target
+									gsap.to(target.scale, {
+										duration: 0.3,
+										x: 1,
+										y: 1,
+										z: 1,
+									});
+								}, 1000);
+							},
+						});
+
+						score += 10;
+						updateScoreDisplay();
+						if (scoreSound.isPlaying) scoreSound.stop();
+						scoreSound.play();
+					}
+				});
+		}
+
+		// Check collision with cowboys
+		if (!bulletHit) {
+			cowboys.forEach((cowboy, index) => {
+				if (bulletHit) return;
+				const distance = cowboy.position.distanceTo(bullet.position);
+				if (distance < 1.5) {
+					bulletHit = true;
 					delete bullets[bullet.uuid];
 					scene.remove(bullet);
+					scene.remove(cowboy);
+					cowboys.splice(index, 1);
 
-					gsap.to(target.scale, {
-						duration: 0.3,
-						x: 0,
-						y: 0,
-						z: 0,
-						onComplete: () => {
-							target.visible = false;
-							setTimeout(() => {
-								target.visible = true;
-								target.position.x = Math.random() * 10 - 5;
-								target.position.z = -Math.random() * 5 - 5;
-
-								// Scale back up the target
-								gsap.to(target.scale, {
-									duration: 0.3,
-									x: 1,
-									y: 1,
-									z: 1,
-								});
-							}, 1000);
-						},
-					});
-
-					score += 10;
+					score += 50;
 					updateScoreDisplay();
 					if (scoreSound.isPlaying) scoreSound.stop();
 					scoreSound.play();
 				}
 			});
+		}
 	});
 	
 	// Update cowboy animation
