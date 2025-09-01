@@ -5,9 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// All (namespace) imports first
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three';
-
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+// Multiple imports next, sorted by imported identifier (ESLint sort-imports)
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Text } from 'troika-three-text';
 import { XR_BUTTONS } from 'gamepad-wrapper';
 import { gsap } from 'gsap';
@@ -23,7 +25,8 @@ const targets = [];
 
 // Cowboy enemies
 const cowboys = [];
-let cowboyMixer = null;
+const cowboyMixers = [];
+let cowboyGltf = null;
 
 // Mouse controls
 let mouseBlaster = null;
@@ -47,6 +50,60 @@ function updateScoreDisplay() {
 	const displayScore = clampedScore.toString().padStart(4, '0');
 	scoreText.text = displayScore;
 	scoreText.sync();
+}
+
+function spawnCowboy(scene) {
+	if (!cowboyGltf) {
+		console.log('No cowboy GLTF loaded yet');
+		return;
+	}
+
+	console.log('Spawning cowboy...');
+	
+	// Properly clone the GLTF scene with animations using SkeletonUtils
+	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
+	
+	// Set position - start with a fixed visible position for debugging
+	cowboy.position.set(-3, 0, -8);
+	cowboy.scale.setScalar(1.2);
+	scene.add(cowboy);
+	cowboys.push(cowboy);
+	
+	console.log('Cowboy added to scene at position:', cowboy.position);
+	console.log('Total cowboys:', cowboys.length);
+
+	// Setup animation mixer for this cowboy
+	if (cowboyGltf.animations && cowboyGltf.animations.length > 0) {
+		const mixer = new THREE.AnimationMixer(cowboy);
+		cowboyMixers.push(mixer);
+		
+		console.log('Setting up animations, found:', cowboyGltf.animations.length, 'animations');
+		
+		// Find and play wink animation (or first available animation)
+		let winkAction = null;
+		for (let animation of cowboyGltf.animations) {
+			if (animation.name.toLowerCase().includes('wink') || 
+				animation.name.toLowerCase().includes('wave') ||
+				animation.name.toLowerCase().includes('greeting')) {
+				winkAction = mixer.clipAction(animation);
+				break;
+			}
+		}
+		
+		// If no wink animation found, use first animation
+		if (!winkAction && cowboyGltf.animations.length > 0) {
+			winkAction = mixer.clipAction(cowboyGltf.animations[0]);
+			console.log('Using first animation:', cowboyGltf.animations[0].name);
+		}
+		
+		if (winkAction) {
+			winkAction.setLoop(THREE.LoopRepeat, Infinity);
+			winkAction.play();
+			console.log('Animation started');
+		}
+	} else {
+		console.log('No animations found for cowboy');
+	}
 }
 
 function fireBullet(scene, position, quaternion) {
@@ -103,37 +160,8 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 
 	// Load cowboy enemy
 	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
-		const cowboy = gltf.scene;
-		cowboy.position.set(-3, 0, -8);
-		cowboy.scale.setScalar(1.2);
-		scene.add(cowboy);
-		cowboys.push(cowboy);
-
-		// Setup animation mixer for cowboy
-		if (gltf.animations && gltf.animations.length > 0) {
-			cowboyMixer = new THREE.AnimationMixer(cowboy);
-			
-			// Find and play wink animation (or first available animation)
-			let winkAction = null;
-			for (let animation of gltf.animations) {
-				if (animation.name.toLowerCase().includes('wink') || 
-					animation.name.toLowerCase().includes('wave') ||
-					animation.name.toLowerCase().includes('greeting')) {
-					winkAction = cowboyMixer.clipAction(animation);
-					break;
-				}
-			}
-			
-			// If no wink animation found, use first animation
-			if (!winkAction && gltf.animations.length > 0) {
-				winkAction = cowboyMixer.clipAction(gltf.animations[0]);
-			}
-			
-			if (winkAction) {
-				winkAction.setLoop(THREE.LoopRepeat, Infinity);
-				winkAction.play();
-			}
-		}
+		cowboyGltf = gltf;
+		spawnCowboy(scene);
 	});
 
 	scene.add(scoreText);
@@ -182,8 +210,8 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 			const blasterWorldPosition = new THREE.Vector3();
 			mouseBlaster.getWorldPosition(blasterWorldPosition);
 			
-			// Calculate direction vector from blaster to target point
-			const _direction = targetPoint.clone().sub(blasterWorldPosition).normalize();
+			// Calculate direction vector from blaster to target point (used for quaternion calculation)
+			targetPoint.clone().sub(blasterWorldPosition).normalize();
 			
 			// Create quaternion from direction
 			const quaternion = new THREE.Quaternion();
@@ -304,6 +332,16 @@ function onFrame(
 					scene.remove(bullet);
 					scene.remove(cowboy);
 					cowboys.splice(index, 1);
+					
+					// Remove corresponding mixer
+					if (cowboyMixers[index]) {
+						cowboyMixers.splice(index, 1);
+					}
+
+					// Spawn new cowboy after a short delay
+					setTimeout(() => {
+						spawnCowboy(scene);
+					}, 1000);
 
 					score += 50;
 					updateScoreDisplay();
@@ -314,10 +352,10 @@ function onFrame(
 		}
 	});
 	
-	// Update cowboy animation
-	if (cowboyMixer) {
-		cowboyMixer.update(delta);
-	}
+	// Update cowboy animations
+	cowboyMixers.forEach(mixer => {
+		mixer.update(delta);
+	});
 	
 	gsap.ticker.tick(delta);
 }

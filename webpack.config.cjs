@@ -8,6 +8,13 @@ module.exports = {
 	entry: {
 		index: './src/index.js',
 	},
+	resolve: {
+		alias: {
+			three: path.resolve(__dirname, 'node_modules/three'),
+		},
+		symlinks: false,
+		preferAbsolute: true,
+	},
 	devServer: {
 		static: {
 			directory: path.join(__dirname, 'dist'),
