@@ -403,12 +403,19 @@ function onFrame(
 	for (let i = 0; i < cowboys.length; i++) {
 		const cowboy = cowboys[i];
 		
-		// Get the player's camera world position to use as the target
+		// Get the player's camera world position
 		const playerTargetPosition = new THREE.Vector3();
 		camera.getWorldPosition(playerTargetPosition);
 
-		// Make cowboys face the player
-		cowboy.lookAt(playerTargetPosition);
+		// Create a target on the same horizontal plane as the cowboy to prevent tilting
+		const lookAtTarget = new THREE.Vector3(
+			playerTargetPosition.x,
+			cowboy.position.y,
+			playerTargetPosition.z,
+		);
+
+		// Make cowboys face the player's direction but stay upright
+		cowboy.lookAt(lookAtTarget);
 		
 		// Update the arrow to show where the cowboy is looking
 		if (cowboy.userData.arrow) {
@@ -418,7 +425,7 @@ function onFrame(
 			cowboy.userData.arrow.position.copy(arrowPosition);
 			
 			// Update arrow direction to match cowboy's facing direction
-						const cowboyDirection = new THREE.Vector3().subVectors(playerTargetPosition, cowboy.position).normalize();
+			const cowboyDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
 			cowboy.userData.arrow.setDirection(cowboyDirection);
 		}
 	}
