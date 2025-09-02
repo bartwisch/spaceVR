@@ -542,18 +542,25 @@ function onFrame(
 						// After death animation completes, remove cowboy
 						setTimeout(() => {
 							console.log('Death animation complete, removing cowboy from scene');
+
+							// Find the current index of the cowboy, as it may have changed
+							const currentIndex = cowboys.indexOf(cowboy);
+							if (currentIndex === -1) {
+								// Cowboy already removed, do nothing
+								return;
+							}
+
 							// Remove the arrow helper if it exists
 							if (cowboy.userData.arrow) {
 								scene.remove(cowboy.userData.arrow);
 							}
 							scene.remove(cowboy);
-							cowboys.splice(index, 1);
+							cowboys.splice(currentIndex, 1);
 							console.log('Cowboys array length after removal:', cowboys.length);
 							
-							// Remove corresponding mixer data
-							if (cowboyMixers[index]) {
-								cowboyMixers.splice(index, 1);
-							}
+							// Remove corresponding mixer data at the same index
+							cowboyMixers.splice(currentIndex, 1);
+							
 						}, 4000); // Wait 4 seconds total for death animation
 						
 					} else {
