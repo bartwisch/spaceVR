@@ -50,6 +50,7 @@ let cowboyGltf = null;
 
 // Road and movement
 let road = null;
+let backgroundPlane = null;
 let playerPosition = 0;
 const playerSpeed = 1.5; // Player walking speed
 
@@ -89,9 +90,9 @@ function spawnCowboy(scene) {
 	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
 	
 	// Cowboys should spawn far away, appearing to come from the background plane.
-	const PLANE_WIDTH = 500; // Match the background plane's width
-	const spawnX = (Math.random() - 0.5) * PLANE_WIDTH;
-	const spawnZ = -playerPosition - 130 - Math.random() * 15; // Spawn just in front of the plane
+	const ROAD_WIDTH = 9; // A bit less than the actual road width of 10
+	const spawnX = (Math.random() - 0.5) * ROAD_WIDTH;
+	const spawnZ = -playerPosition - 150; // Spawn at the plane's depth
 
 	cowboy.position.set(
 		spawnX,
@@ -262,7 +263,7 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	// Create a large background plane
 	const backgroundGeometry = new THREE.PlaneGeometry(500, 200);
 	const backgroundMaterial = new THREE.MeshStandardMaterial({ color: 0x000020 }); // Dark blue
-	const backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+	backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
 	
 	// Position it far in the distance to act as a backdrop
 	backgroundPlane.position.z = -150;
@@ -435,6 +436,11 @@ function onFrame(
 	// Move the road to stay centered on the player
 	if (road) {
 		road.position.z = -playerPosition;
+	}
+
+	// Move the background plane with the player to keep it as a backdrop
+	if (backgroundPlane) {
+		backgroundPlane.position.z = -playerPosition - 150;
 	}
 	
 	// Update cowboys: movement, orientation, and animations
