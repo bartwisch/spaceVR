@@ -27,8 +27,9 @@ const WALK_SPEED = 0.8;
 const ATTACK_THRESHOLD = 5; // Distance to stop and attack (or idle)
 const WALK_THRESHOLD = 12; // Distance to switch from running to walking
 
-const AVOIDANCE_RADIUS = 3.0;
-const AVOIDANCE_STRENGTH = 1.5;
+const AVOIDANCE_RADIUS = 3.0; // For cowboy-cowboy avoidance
+const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For cowboy-obstacle avoidance
+const AVOIDANCE_STRENGTH = 3.0; // Increased strength
 
 // Helper to smoothly transition between animations
 function switchToAction(cowboyData, action, duration = 0.3) {
@@ -208,33 +209,7 @@ function createRoad(scene) {
 	road.rotation.x = -Math.PI / 2; // Lay flat
 	road.position.y = -0.5; // Slightly below player level
 	
-	// Add road markings (center line)
-	const centerLineGeometry = new THREE.PlaneGeometry(0.2, 2);
-	const centerLineMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-	
-	// Add lane markings
-	const laneMarkingGeometry = new THREE.PlaneGeometry(0.3, 1);
-	const laneMarkingMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 });
-	
-	for (let i = 0; i < 200; i++) {
-		// Center line markings
-		const centerMarking = new THREE.Mesh(centerLineGeometry, centerLineMaterial);
-		centerMarking.rotation.x = -Math.PI / 2;
-		centerMarking.position.set(0, -0.49, -i * 10);
-		road.add(centerMarking);
-		
-		// Left lane markings
-		const leftMarking = new THREE.Mesh(laneMarkingGeometry, laneMarkingMaterial);
-		leftMarking.rotation.x = -Math.PI / 2;
-		leftMarking.position.set(-2, -0.49, -i * 10 - 2);
-		road.add(leftMarking);
-		
-		// Right lane markings
-		const rightMarking = new THREE.Mesh(laneMarkingGeometry, laneMarkingMaterial);
-		rightMarking.rotation.x = -Math.PI / 2;
-		rightMarking.position.set(2, -0.49, -i * 10 - 2);
-		road.add(rightMarking);
-	}
+	// Road markers have been removed.
 	
 	scene.add(road);
 }
@@ -584,7 +559,6 @@ function onFrame(
 		}
 
 		// Avoid obstacles (trees, houses)
-		const OBSTACLE_AVOIDANCE_RADIUS = 6.0;
 		for (const obstacle of obstacles) {
 			const distanceToObstacle = cowboy.position.distanceTo(obstacle.position);
 			if (distanceToObstacle < OBSTACLE_AVOIDANCE_RADIUS) {
