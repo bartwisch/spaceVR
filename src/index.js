@@ -109,48 +109,12 @@ function spawnCowboy(scene) {
 	console.log('Cowboy added to scene at position:', cowboy.position);
 	console.log('Total cowboys:', cowboys.length);
 
-	// --- Attach weapon to hand ---
-	let rightHandNode = null;
-	cowboy.traverse((object) => {
-		// Log all bone names to find the correct one for the hand
-		if (object.isBone) {
-			console.log(`Found Bone: ${object.name}`);
-		}
+	// Store the cowboy for weapon attachment in the next frame
+	// This gives the model time to be fully processed
+	setTimeout(() => {
+		attachWeaponToCowboy(cowboy);
+	}, 100);
 
-		// --- GUESSING BONE NAME --- 
-		// Common names: 'RightHand', 'hand_r', 'bip01_r_hand', 'RightHand_end'
-		// Let's check for multiple possible names
-		if (object.isBone && (object.name === 'RightHand' || object.name === 'hand_r' || object.name === 'bip01_r_hand' || object.name === 'RightHand_end')) {
-			// Using a guess based on common humanoid rigs
-			rightHandNode = object;
-		}
-	});
-
-	if (rightHandNode) {
-		console.log('Found right hand bone, attaching weapon.');
-		if (blasterGroup.children.length > 0) {
-			const cowboyWeapon = blasterGroup.children[0].clone(); // Clone the actual mesh
-
-			// Adjust scale, position, and rotation to fit in the hand
-			cowboyWeapon.scale.setScalar(0.8);
-			cowboyWeapon.position.set(0.05, 0.1, 0); // x, y, z offset from hand bone
-			cowboyWeapon.rotation.set(Math.PI / 2, 0, 0); // Rotate to align with hand
-
-			rightHandNode.add(cowboyWeapon);
-			console.log('Successfully attached weapon to cowboy hand');
-		} else {
-			console.log('No blaster found in blasterGroup, cannot attach weapon');
-		}
-	} else {
-		console.log('Could not find the right hand bone to attach a weapon.');
-		// Let's also try to find any node that might contain "hand" in its name
-		cowboy.traverse((object) => {
-			if (object.name && object.name.toLowerCase().includes('hand')) {
-				console.log('Found node with "hand" in name:', object.name);
-			}
-		});
-	}
-	
 	console.log('Cowboy added to scene at position:', cowboy.position);
 	console.log('Total cowboys:', cowboys.length);
 
@@ -221,6 +185,32 @@ function spawnCowboy(scene) {
 		
 	} else {
 		console.log('No animations found for cowboy');
+	}
+}
+
+function attachWeaponToCowboy(cowboy) {
+	console.log('Attaching weapon to cowboy...');
+	
+	if (blasterGroup.children.length > 0) {
+		const cowboyWeapon = blasterGroup.children[0].clone();
+		console.log('Cowboy weapon cloned');
+		
+		// Position the weapon where the right hand would be
+		// This is a guess based on typical humanoid proportions
+		cowboyWeapon.scale.setScalar(0.6);
+		cowboyWeapon.position.set(0.4, 1.8, 0.2); // x, y, z - adjust to right hand position
+		cowboyWeapon.rotation.set(0, Math.PI/2, 0); // Rotate to face forward
+		
+		// Add the weapon directly to the cowboy
+		cowboy.add(cowboyWeapon);
+		console.log('Successfully attached weapon to cowboy (direct attachment)');
+		
+		// Log the weapon's world position to verify it's visible
+		const worldPos = new THREE.Vector3();
+		cowboyWeapon.getWorldPosition(worldPos);
+		console.log('Weapon world position:', worldPos);
+	} else {
+		console.log('No blaster found in blasterGroup');
 	}
 }
 
@@ -365,6 +355,20 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 
 	gltfLoader.load('assets/blaster.glb', (gltf) => {
 		blasterGroup.add(gltf.scene);
+		console.log('=== BLASTER LOADED ===');
+		console.log('Blaster group children count:', blasterGroup.children.length);
+		if (blasterGroup.children.length > 0) {
+			const firstChild = blasterGroup.children[0];
+			console.log('First blaster child:', firstChild);
+			console.log('First blaster child name:', firstChild.name);
+			console.log('First blaster child type:', firstChild.type);
+			console.log('First blaster child visible:', firstChild.visible);
+			console.log('First blaster child children count:', firstChild.children.length);
+			if (firstChild.children.length > 0) {
+				console.log('First blaster grandchild:', firstChild.children[0]);
+				console.log('First blaster grandchild name:', firstChild.children[0].name);
+			}
+		}
 		
 		// Create mouse blaster for non-VR mode
 		mouseBlaster = gltf.scene.clone();
