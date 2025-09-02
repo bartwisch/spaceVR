@@ -77,13 +77,27 @@ function spawnCowboy(scene) {
 		-playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
 	);
 	
-	// Make the cowboy face the player
-	// Point the cowboy toward the player's position (0, 0, -playerPosition)
-	cowboy.lookAt(0, 0, -playerPosition);
+	// Make the cowboy face the player's blaster position
+	// Initially point toward a default position, will be updated in onFrame
+	cowboy.lookAt(0, 1.6, -playerPosition); // Default to player's eye level
 	
 	cowboy.scale.setScalar(1.2);
 	scene.add(cowboy);
 	cowboys.push(cowboy);
+	
+	// Create a visual arrow to show where the cowboy is looking
+	const arrowDirection = new THREE.Vector3(0, 1.6, -playerPosition).sub(cowboy.position).normalize();
+	const arrowOrigin = new THREE.Vector3().copy(cowboy.position);
+	arrowOrigin.y += 1.5; // Position arrow at cowboy's eye level
+	
+	const arrowLength = 3;
+	const arrowColor = 0xff0000; // Red color
+	
+	const arrowHelper = new THREE.ArrowHelper(arrowDirection, arrowOrigin, arrowLength, arrowColor);
+	scene.add(arrowHelper);
+	
+	// Store arrow reference with cowboy for updates
+	cowboy.userData.arrow = arrowHelper;
 	
 	console.log('Cowboy added to scene at position:', cowboy.position);
 	console.log('Total cowboys:', cowboys.length);
@@ -128,6 +142,7 @@ function spawnCowboy(scene) {
 		
 		// Store death animation reference
 		cowboy.userData = {
+			...cowboy.userData,
 			idleAction: idleAction,
 			deathAction: deathAction,
 			hasPlayedDeath: false
@@ -205,7 +220,7 @@ function createRoad(scene) {
 	scene.add(road);
 }
 
-function setupScene({ scene, camera, _renderer, _player, _controllers, controls }) {
+function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
 	// Create road
 	createRoad(scene);
 	
@@ -216,6 +231,29 @@ function setupScene({ scene, camera, _renderer, _player, _controllers, controls 
 	const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 	directionalLight.position.set(5, 10, 7);
 	scene.add(directionalLight);
+	
+	// Create a circle around the player
+	const circleGeometry = new THREE.BufferGeometry();
+	const circleMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 }); // Green color
+	
+	// Create circle points
+	const radius = 2;
+	const segments = 32;
+	const circlePoints = [];
+	for (let i = 0; i <= segments; i++) {
+		const theta = (i / segments) * Math.PI * 2;
+		circlePoints.push(
+			Math.cos(theta) * radius,
+			0.1, // Slightly above ground
+			Math.sin(theta) * radius
+		);
+	}
+	
+	circleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(circlePoints, 3));
+	const circle = new THREE.Line(circleGeometry, circleMaterial);
+	
+	// Add the circle as a child of the player so it moves with the player
+	player.add(circle);
 	
 	const gltfLoader = new GLTFLoader();
 
@@ -374,11 +412,35 @@ function onFrame(
 		road.position.z = -playerPosition;
 	}
 	
-	// Update cowboy orientations to face the player
+	// Update cowboy orientations to face the player's blaster
 	for (let i = 0; i < cowboys.length; i++) {
 		const cowboy = cowboys[i];
-		// Make cowboys face the player's current position
-		cowboy.lookAt(0, 0, -playerPosition);
+		
+		// Determine the blaster position based on current mode
+		let blasterPosition;
+		if (isMouseMode && mouseBlaster) {
+			// In mouse mode, get blaster position from camera
+			blasterPosition = new THREE.Vector3();
+			mouseBlaster.getWorldPosition(blasterPosition);
+		} else {
+			// In VR mode or default, use player/camera position with offset
+			blasterPosition = new THREE.Vector3(0, 1.6, -playerPosition); // Approximate blaster position
+		}
+		
+		// Make cowboys face the blaster position
+		cowboy.lookAt(blasterPosition);
+		
+		// Update the arrow to show where the cowboy is looking
+		if (cowboy.userData.arrow) {
+			// Update arrow position to match cowboy's position (at eye level)
+			const arrowPosition = new THREE.Vector3().copy(cowboy.position);
+			arrowPosition.y += 1.5; // Position arrow at cowboy's eye level
+			cowboy.userData.arrow.position.copy(arrowPosition);
+			
+			// Update arrow direction to match cowboy's facing direction
+			const cowboyDirection = new THREE.Vector3().subVectors(blasterPosition, cowboy.position).normalize();
+			cowboy.userData.arrow.setDirection(cowboyDirection);
+		}
 	}
 	
 	// Spawn new cowboys periodically
@@ -390,6 +452,10 @@ function onFrame(
 	for (let i = cowboys.length - 1; i >= 0; i--) {
 		const cowboy = cowboys[i];
 		if (cowboy.position.z > -playerPosition + 15) { // 15 units behind player
+			// Remove the arrow helper if it exists
+			if (cowboy.userData.arrow) {
+				scene.remove(cowboy.userData.arrow);
+			}
 			scene.remove(cowboy);
 			cowboys.splice(i, 1);
 			if (cowboyMixers[i]) {
@@ -489,6 +555,10 @@ function onFrame(
 						// After death animation completes, remove cowboy
 						setTimeout(() => {
 							console.log('Death animation complete, removing cowboy from scene');
+							// Remove the arrow helper if it exists
+							if (cowboy.userData.arrow) {
+								scene.remove(cowboy.userData.arrow);
+							}
 							scene.remove(cowboy);
 							cowboys.splice(index, 1);
 							console.log('Cowboys array length after removal:', cowboys.length);
@@ -506,6 +576,10 @@ function onFrame(
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
 						console.log('Removing cowboy from scene');
+						// Remove the arrow helper if it exists
+						if (cowboy.userData.arrow) {
+							scene.remove(cowboy.userData.arrow);
+						}
 						scene.remove(cowboy);
 						cowboys.splice(index, 1);
 						console.log('Cowboys array length after removal:', cowboys.length);
