@@ -59,6 +59,7 @@ let mouseBlaster = null;
 let isMouseMode = false;
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
+const keyStates = {};
 
 let score = 0;
 const scoreText = new Text();
@@ -248,9 +249,70 @@ function createRoad(scene) {
 	scene.add(road);
 }
 
+function createTree() {
+	const tree = new THREE.Group();
+
+	const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // SaddleBrown
+	const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 4, 8);
+	const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+	trunk.position.y = 2; // Half of height
+	tree.add(trunk);
+
+	const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // ForestGreen
+	const leavesGeometry = new THREE.IcosahedronGeometry(3);
+	const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+	leaves.position.y = 5; // Above the trunk
+	tree.add(leaves);
+
+	return tree;
+}
+
+function createHouse() {
+	const house = new THREE.Group();
+
+	const baseMaterial = new THREE.MeshStandardMaterial({ color: 0xDEB887 }); // BurlyWood
+	const baseGeometry = new THREE.BoxGeometry(5, 5, 5);
+	const base = new THREE.Mesh(baseGeometry, baseMaterial);
+	base.position.y = 2.5;
+	house.add(base);
+
+	const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xA52A2A }); // Brown
+	const roofGeometry = new THREE.ConeGeometry(4, 3, 4); // radius, height, radialSegments
+	const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+	roof.position.y = 5 + 1.5; // On top of the base
+	roof.rotation.y = Math.PI / 4; // Align pyramid edges
+	house.add(roof);
+
+	return house;
+}
+
+function populateScenery(scene) {
+	for (let i = 0; i < 100; i++) {
+		// Alternate sides
+		const side = (i % 2 === 0) ? 1 : -1;
+
+		// Position far from the road
+		const xPos = side * (15 + Math.random() * 20);
+		const zPos = -i * 20 - Math.random() * 10;
+
+		if (Math.random() > 0.3) { // 70% chance of a tree
+			const tree = createTree();
+			tree.position.set(xPos, 0, zPos);
+			tree.rotation.y = Math.random() * Math.PI;
+			scene.add(tree);
+		} else { // 30% chance of a house
+			const house = createHouse();
+			house.position.set(xPos, 0, zPos);
+			house.rotation.y = Math.random() * Math.PI;
+			scene.add(house);
+		}
+	}
+}
+
 function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
 	// Create road
 	createRoad(scene);
+	populateScenery(scene);
 	
 	// Add some basic environment elements
 	const ambientLight = new THREE.AmbientLight(0x404040, 2);
@@ -422,6 +484,14 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 			camera.quaternion.set(0, 0, 0, 1); // Reset to identity quaternion
 		}
 	});
+
+	// Add listeners for fly controls
+	window.addEventListener('keydown', (event) => {
+		keyStates[event.code] = true;
+	});
+	window.addEventListener('keyup', (event) => {
+		keyStates[event.code] = false;
+	});
 }
 
 function onFrame(
@@ -429,9 +499,29 @@ function onFrame(
 	_time,
 	{ scene, camera, _renderer, player, controllers },
 ) {
-	// Update player position for forward movement
-	playerPosition += playerSpeed * delta;
-	player.position.z = -playerPosition;
+	// --- Fly Controls (replaces automatic movement) ---
+    const FLY_SPEED = 10;
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+
+    camera.getWorldDirection(forward);
+    forward.y = 0; // Project onto horizontal plane
+    forward.normalize();
+
+    right.crossVectors(forward, camera.up); // Get the right vector
+
+    if (keyStates['KeyW']) { // Forward
+        player.position.add(forward.clone().multiplyScalar(FLY_SPEED * delta));
+    }
+    if (keyStates['KeyS']) { // Backward
+        player.position.add(forward.clone().multiplyScalar(-FLY_SPEED * delta));
+    }
+    if (keyStates['KeyA']) { // Left (strafe)
+        player.position.add(right.clone().multiplyScalar(-FLY_SPEED * delta));
+    }
+    if (keyStates['KeyD']) { // Right (strafe)
+        player.position.add(right.clone().multiplyScalar(FLY_SPEED * delta));
+    }
 	
 	// Move the road to stay centered on the player
 	if (road) {
