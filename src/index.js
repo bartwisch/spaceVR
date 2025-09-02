@@ -27,6 +27,9 @@ const WALK_SPEED = 0.8;
 const ATTACK_THRESHOLD = 5; // Distance to stop and attack (or idle)
 const WALK_THRESHOLD = 12; // Distance to switch from running to walking
 
+const AVOIDANCE_RADIUS = 3.0;
+const AVOIDANCE_STRENGTH = 1.5;
+
 // Helper to smoothly transition between animations
 function switchToAction(cowboyData, action, duration = 0.3) {
 	if (!action || cowboyData.currentAction === action) {
@@ -555,23 +558,49 @@ function onFrame(
 
 		// --- Movement & Animation ---
 		const distanceToPlayer = cowboy.position.distanceTo(playerTargetPosition);
+		let moveDirection = new THREE.Vector3();
+		let speed = 0;
 
 		if (distanceToPlayer > WALK_THRESHOLD) {
-			// Move towards player (running)
-			const moveDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
-			cowboy.position.add(moveDirection.multiplyScalar(RUN_SPEED * delta));
+			moveDirection.subVectors(lookAtTarget, cowboy.position).normalize();
+			speed = RUN_SPEED;
 			switchToAction(cowboyData, cowboyData.runAction);
 
 		} else if (distanceToPlayer > ATTACK_THRESHOLD) {
-			// Move towards player (walking)
-			const moveDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
-			cowboy.position.add(moveDirection.multiplyScalar(WALK_SPEED * delta));
+			moveDirection.subVectors(lookAtTarget, cowboy.position).normalize();
+			speed = WALK_SPEED;
 			switchToAction(cowboyData, cowboyData.walkAction);
 
 		} else {
-			// Close enough, stop and idle
+			speed = 0;
 			switchToAction(cowboyData, cowboyData.idleAction);
 		}
+
+		// --- Collision Avoidance ---
+		const avoidanceVector = new THREE.Vector3();
+		for (let j = 0; j < cowboys.length; j++) {
+			if (i === j) continue; // Don't check against self
+
+			const otherCowboy = cowboys[j];
+			// Only avoid cowboys that are also alive
+			if (otherCowboy.userData.hasPlayedDeath) continue;
+
+			const distanceToOther = cowboy.position.distanceTo(otherCowboy.position);
+
+			if (distanceToOther < AVOIDANCE_RADIUS) {
+				const awayVector = new THREE.Vector3().subVectors(cowboy.position, otherCowboy.position).normalize();
+				avoidanceVector.add(awayVector);
+			}
+		}
+
+		// Combine movement and avoidance vectors
+		const intendedMove = moveDirection.multiplyScalar(speed);
+		const avoidanceMove = avoidanceVector.multiplyScalar(AVOIDANCE_STRENGTH);
+		
+		const totalMove = new THREE.Vector3().add(intendedMove).add(avoidanceMove);
+
+		// Apply the final movement
+		cowboy.position.add(totalMove.multiplyScalar(delta));
 
 		// --- Arrow Helper Update ---
 		if (cowboy.userData.arrow) {
