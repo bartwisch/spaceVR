@@ -71,5 +71,5 @@ This document records issues encountered while running the WebXR game and how th
 ## Current status
 
 - The game runs at https://localhost:8081.
-- Scene renders targets and score display; cowboy enemy spawns and animates.
+- Scene renders score display; cowboy enemies spawn and animate along the road.
 - HMR is active; ESLint overlay resolved by import reordering in [src/index.js](src/index.js:8).

@@ -6,7 +6,7 @@ Welcome to **WebXR First Steps**! This **2-hour** tutorial is designed to help y
 
 ## What You’ll Build
 
-By the end of this tutorial, you’ll have created a fully functional WebXR game where players can use VR controllers to shoot targets, track their score, and enjoy an immersive experience complete with sound, vibration, and smooth animations. Here's what the final experience looks like:
+By the end of this tutorial, you'll have created a fully functional WebXR game where players can use VR controllers to shoot cowboy enemies that appear on both sides of a road, track their score, and enjoy an immersive experience complete with sound, vibration, and smooth animations. Here's what the final experience looks like:
 
 <figure style="text-align: center;">
   <img src="./tutorial/assets/targetpractice.gif" style="max-height:376px"/>

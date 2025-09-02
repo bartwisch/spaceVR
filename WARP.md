@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a WebXR tutorial project that creates an immersive target practice game using Three.js. Players can use VR controllers or mouse controls to shoot targets and animated cowboy enemies in a 3D space station environment. The project demonstrates key WebXR concepts including controller interactions, 3D audio, haptic feedback, GLTF model loading, and dual-mode development (VR headset + desktop emulation).
+This is a WebXR tutorial project that creates an immersive game using Three.js. Players can use VR controllers or mouse controls to shoot animated cowboy enemies that spawn on both sides of a road in a 3D space station environment. The project demonstrates key WebXR concepts including controller interactions, 3D audio, haptic feedback, GLTF model loading, and dual-mode development (VR headset + desktop emulation).
 
 ## Development Commands
 
@@ -38,8 +38,8 @@ This is a WebXR tutorial project that creates an immersive target practice game 
 **Game Logic Layer (`src/index.js`)**
 - Implements dual input system: VR controllers (trigger button) and mouse controls (click)
 - Bullet physics with velocity-based movement and time-to-live cleanup system
-- GLTF asset loading for blaster weapon, targets, space station, and animated cowboys
-- Hit detection using 3D distance calculations with different radii for targets vs cowboys
+- GLTF asset loading for blaster weapon and animated cowboys
+- Hit detection using 3D distance calculations for cowboys
 - Score tracking system with custom font rendering via troika-three-text
 - Positional 3D audio system for laser shots and scoring feedback
 
@@ -75,7 +75,7 @@ This is a WebXR tutorial project that creates an immersive target practice game 
 **Asset Organization**
 - `src/assets/`: GLTF models (.glb), audio files (.ogg), and fonts (.ttf)
 - Automatic asset copying during build process
-- Models: blaster weapon, targets, space station environment, cowboy character
+- Models: blaster weapon, cowboy character
 - Audio: laser shot sound, scoring sound with positional audio support
 
 ### Code Quality Standards

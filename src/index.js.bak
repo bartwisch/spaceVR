@@ -26,6 +26,7 @@ const blasterGroup = new THREE.Group();
 const cowboys = [];
 const cowboyMixers = [];
 let cowboyGltf = null;
+let spawnPending = false; // Flag to track if a spawn is already pending
 
 // Road and movement
 let road = null;
@@ -187,15 +188,11 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 	// Create road
 	createRoad(scene);
 	
-	// Add some basic environment elements
-	const ambientLight = new THREE.AmbientLight(0x404040, 2);
-	scene.add(ambientLight);
-	
-	const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-	directionalLight.position.set(5, 10, 7);
-	scene.add(directionalLight);
-	
 	const gltfLoader = new GLTFLoader();
+
+	gltfLoader.load('assets/spacestation.glb', (gltf) => {
+		scene.add(gltf.scene);
+	});
 
 	gltfLoader.load('assets/blaster.glb', (gltf) => {
 		blasterGroup.add(gltf.scene);
@@ -430,6 +427,58 @@ function onFrame(
 			});
 		}
 	});
+	
+	// Update cowboy animations
+	cowboyMixers.forEach(cowboyData => {
+		if (cowboyData.mixer) {
+			cowboyData.mixer.update(delta);
+		}
+	});
+	
+	gsap.ticker.tick(delta);
+}
+
+init(setupScene, onFrame);
+								console.log('Cowboys array length after removal:', cowboys.length);
+								
+								// Remove corresponding mixer data
+								if (cowboyMixers[index]) {
+									cowboyMixers.splice(index, 1);
+								}
+
+								// Check if we need to spawn a new cowboy
+								checkAndSpawnCowboys(scene);
+							}, 4000); // Wait 4 seconds total for death animation
+							
+						} else {
+							// No death animation available, remove immediately
+							console.log('No death animation available, removing immediately');
+							console.log('Removing bullet from bullets object and scene');
+							delete bullets[bullet.uuid];
+							scene.remove(bullet);
+							console.log('Removing cowboy from scene');
+							scene.remove(cowboy);
+							cowboys.splice(index, 1);
+							console.log('Cowboys array length after removal:', cowboys.length);
+							
+							// Remove corresponding mixer data
+							if (cowboyMixers[index]) {
+								cowboyMixers.splice(index, 1);
+							}
+
+							// Check if we need to spawn a new cowboy
+							checkAndSpawnCowboys(scene);
+						}
+
+						score += 50;
+						updateScoreDisplay();
+						if (scoreSound.isPlaying) scoreSound.stop();
+						scoreSound.play();
+						console.log('Cowboy hit processing complete');
+					}
+				});
+			}
+		});
 	
 	// Update cowboy animations
 	cowboyMixers.forEach(cowboyData => {

@@ -1,6 +1,6 @@
 # Chapter 5: Making It a Game
 
-In this chapter, we’ll turn your WebXR experience into a simple game by adding a proximity-based hit test for the targets and implementing a scoreboard to track the player’s score. These additions will make your scene more interactive and engaging, providing immediate feedback when a target is hit.
+In this chapter, we'll turn your WebXR experience into a simple game by adding a proximity-based hit test for the cowboy enemies and implementing a scoreboard to track the player's score. These additions will make your scene more interactive and engaging, providing immediate feedback when an enemy is hit.
 
 ## Setting Up the Scoreboard
 
@@ -56,7 +56,7 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 
 ## Implementing Proximity-Based Hit Test
 
-To determine whether a bullet hits a target, we use a proximity-based hit test. This method checks the distance between the bullet and each target, and if they’re close enough, the target is considered “hit”:
+To determine whether a bullet hits a cowboy enemy, we use a proximity-based hit test. This method checks the distance between the bullet and each cowboy, and if they're close enough, the cowboy is considered "hit":
 
 ```javascript
 function onFrame() {

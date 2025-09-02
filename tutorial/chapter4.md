@@ -4,7 +4,7 @@ In this chapter, we’ll take your WebXR experience to the next level by replaci
 
 ## Loading GLTF Models
 
-We’ll use the `GLTFLoader` from Three.js to load our 3D models. The models we’ll be using are a space station, a blaster, and a set of targets. Here’s how we load and set them up in the scene:
+We'll use the `GLTFLoader` from Three.js to load our 3D models. The models we'll be using are a space station, a blaster, and a cowboy enemy model. Here's how we load and set them up in the scene:
 
 ### Setting Up the Scene
 
@@ -13,7 +13,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // global variables
 const blasterGroup = new THREE.Group();
-const targets = []; // array to keep track of targets, we will need to use this later
 
 function setupScene({ scene, camera, renderer, player, controllers }) {
 	const gltfLoader = new GLTFLoader();
@@ -28,19 +27,9 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 		blasterGroup.add(gltf.scene);
 	});
 
-	// Load and clone the target models
-	gltfLoader.load('assets/target.glb', (gltf) => {
-		for (let i = 0; i < 3; i++) {
-			const target = gltf.scene.clone();
-			// spawn targets at random locations in front of the player
-			target.position.set(
-				Math.random() * 10 - 5,
-				i * 2 + 1,
-				-Math.random() * 5 - 5,
-			);
-			scene.add(target);
-			targets.push(target);
-		}
+	// Load the cowboy enemy model
+	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
+		// We'll implement cowboy spawning logic in a later chapter
 	});
 }
 ```
@@ -57,7 +46,7 @@ function setupScene({ scene, camera, renderer, player, controllers }) {
 
   ![Blaster Model](./assets/blaster.png)
 
-- **Targets**: Three instances of the target model are created by cloning the original model. Each target is randomly positioned within the scene, providing dynamic and varied locations for the user to aim at. Here's what it looks like:
+- **Cowboy Enemy**: We'll implement the logic for spawning cowboy enemies in a later chapter. This will provide dynamic targets for the user to aim at. Here's what it looks like:
 
   ![Target Model](./assets/target.png)
 

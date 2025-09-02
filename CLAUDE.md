@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a WebXR tutorial project built with Three.js that teaches developers to create immersive VR experiences. The project is a target practice game where players can use VR controllers or mouse controls to shoot targets in a 3D space station environment.
+This is a WebXR tutorial project built with Three.js that teaches developers to create immersive VR experiences. The project is a game where players can use VR controllers or mouse controls to shoot cowboy enemies that spawn on both sides of a road in a 3D space station environment.
 
 ## Development Commands
 
@@ -32,7 +32,7 @@ This is a WebXR tutorial project built with Three.js that teaches developers to 
 **Game Logic (`index.js`)**
 - Dual input system: VR controllers (trigger button) and mouse controls (click)
 - Bullet physics system with velocity-based movement and time-to-live cleanup
-- GLTF model loading for blaster weapon, targets, space station environment, and animated cowboy character
+- GLTF model loading for blaster weapon and animated cowboy character
 - Hit detection using 3D distance calculations
 - Score tracking with custom font rendering via troika-three-text
 - Positional 3D audio for laser shots and scoring
