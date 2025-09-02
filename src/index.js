@@ -233,27 +233,14 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	scene.add(directionalLight);
 	
 	// Create a circle around the player
-	const circleGeometry = new THREE.BufferGeometry();
-	const circleMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 }); // Green color
-	
-	// Create circle points
-	const radius = 2;
-	const segments = 32;
-	const circlePoints = [];
-	for (let i = 0; i <= segments; i++) {
-		const theta = (i / segments) * Math.PI * 2;
-		circlePoints.push(
-			Math.cos(theta) * radius,
-			0.1, // Slightly above ground
-			Math.sin(theta) * radius
-		);
-	}
-	
-	circleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(circlePoints, 3));
-	const circle = new THREE.Line(circleGeometry, circleMaterial);
-	
+	const ringGeometry = new THREE.RingGeometry(1.9, 2, 32);
+	const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+	const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+	ring.rotation.x = -Math.PI / 2; // Rotate it to be flat on the ground
+	ring.position.y = 0.1; // Lift it slightly above the ground
+
 	// Add the circle as a child of the player so it moves with the player
-	player.add(circle);
+	player.add(ring);
 	
 	const gltfLoader = new GLTFLoader();
 
@@ -416,19 +403,12 @@ function onFrame(
 	for (let i = 0; i < cowboys.length; i++) {
 		const cowboy = cowboys[i];
 		
-		// Determine the blaster position based on current mode
-		let blasterPosition;
-		if (isMouseMode && mouseBlaster) {
-			// In mouse mode, get blaster position from camera
-			blasterPosition = new THREE.Vector3();
-			mouseBlaster.getWorldPosition(blasterPosition);
-		} else {
-			// In VR mode or default, use player/camera position with offset
-			blasterPosition = new THREE.Vector3(0, 1.6, -playerPosition); // Approximate blaster position
-		}
-		
-		// Make cowboys face the blaster position
-		cowboy.lookAt(blasterPosition);
+		// Get the player's camera world position to use as the target
+		const playerTargetPosition = new THREE.Vector3();
+		camera.getWorldPosition(playerTargetPosition);
+
+		// Make cowboys face the player
+		cowboy.lookAt(playerTargetPosition);
 		
 		// Update the arrow to show where the cowboy is looking
 		if (cowboy.userData.arrow) {
@@ -438,7 +418,7 @@ function onFrame(
 			cowboy.userData.arrow.position.copy(arrowPosition);
 			
 			// Update arrow direction to match cowboy's facing direction
-			const cowboyDirection = new THREE.Vector3().subVectors(blasterPosition, cowboy.position).normalize();
+						const cowboyDirection = new THREE.Vector3().subVectors(playerTargetPosition, cowboy.position).normalize();
 			cowboy.userData.arrow.setDirection(cowboyDirection);
 		}
 	}
