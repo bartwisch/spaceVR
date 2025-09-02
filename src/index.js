@@ -88,14 +88,15 @@ function spawnCowboy(scene) {
 	// Properly clone the GLTF scene with animations using SkeletonUtils
 	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
 	
-	// Set position on either side of the road, close to the player
-	const side = Math.random() > 0.5 ? 1 : -1; // Left or right side
-	const distanceFromRoad = 3 + Math.random() * 2; // 3-5 units from road center
-	
+	// Cowboys should spawn far away, appearing to come from the background plane.
+	const PLANE_WIDTH = 500; // Match the background plane's width
+	const spawnX = (Math.random() - 0.5) * PLANE_WIDTH;
+	const spawnZ = -playerPosition - 130 - Math.random() * 15; // Spawn just in front of the plane
+
 	cowboy.position.set(
-		side * distanceFromRoad,    // X: left or right of road
-		0,                          // Y: ground level
-		-playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
+		spawnX,
+		0, // ground level
+		spawnZ
 	);
 	
 	// Make the cowboy face the player's blaster position
@@ -257,6 +258,17 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 	directionalLight.position.set(5, 10, 7);
 	scene.add(directionalLight);
+
+	// Create a large background plane
+	const backgroundGeometry = new THREE.PlaneGeometry(500, 200);
+	const backgroundMaterial = new THREE.MeshStandardMaterial({ color: 0x000020 }); // Dark blue
+	const backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+	
+	// Position it far in the distance to act as a backdrop
+	backgroundPlane.position.z = -150;
+    backgroundPlane.position.y = 100; // Center it vertically a bit
+	
+	scene.add(backgroundPlane);
 	
 	// Create a circle around the player
 	const ringGeometry = new THREE.RingGeometry(1.9, 2, 32);
