@@ -29,8 +29,8 @@ let cowboyGltf = null;
 
 // Road and movement
 let road = null;
-let roadPosition = 0;
-const roadSpeed = 0.5; // Slow movement along the road
+let playerPosition = 0;
+const playerSpeed = 1.5; // Player walking speed
 
 // Mouse controls
 let mouseBlaster = null;
@@ -40,7 +40,7 @@ const raycaster = new THREE.Raycaster();
 
 let score = 0;
 const scoreText = new Text();
-scoreText.fontSize = 0.52;
+scoreText.fontSize = 0.3; // Smaller font size for top position
 scoreText.font = 'assets/SpaceMono-Bold.ttf';
 scoreText.position.z = -2;
 scoreText.color = 0xffa276;
@@ -67,15 +67,20 @@ function spawnCowboy(scene) {
 	// Properly clone the GLTF scene with animations using SkeletonUtils
 	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
 	
-	// Set position on either side of the road
+	// Set position on either side of the road, close to the player
 	const side = Math.random() > 0.5 ? 1 : -1; // Left or right side
 	const distanceFromRoad = 3 + Math.random() * 2; // 3-5 units from road center
 	
 	cowboy.position.set(
 		side * distanceFromRoad,    // X: left or right of road
 		0,                          // Y: ground level
-		-roadPosition - 10 - Math.random() * 10  // Z: ahead of player
+		-playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
 	);
+	
+	// Make the cowboy face the player
+	// Point the cowboy toward the player's position (0, 0, -playerPosition)
+	cowboy.lookAt(0, 0, -playerPosition);
+	
 	cowboy.scale.setScalar(1.2);
 	scene.add(cowboy);
 	cowboys.push(cowboy);
@@ -158,7 +163,7 @@ function fireBullet(scene, position, quaternion) {
 
 function createRoad(scene) {
 	// Create a simple road using a plane
-	const roadGeometry = new THREE.PlaneGeometry(10, 1000);
+	const roadGeometry = new THREE.PlaneGeometry(10, 2000); // Longer road
 	const roadMaterial = new THREE.MeshStandardMaterial({ 
 		color: 0x333333,
 		roughness: 0.8,
@@ -169,21 +174,38 @@ function createRoad(scene) {
 	road.rotation.x = -Math.PI / 2; // Lay flat
 	road.position.y = -0.5; // Slightly below player level
 	
-	// Add road markings
-	const markingGeometry = new THREE.PlaneGeometry(0.2, 2);
-	const markingMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+	// Add road markings (center line)
+	const centerLineGeometry = new THREE.PlaneGeometry(0.2, 2);
+	const centerLineMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
 	
-	for (let i = 0; i < 100; i++) {
-		const marking = new THREE.Mesh(markingGeometry, markingMaterial);
-		marking.rotation.x = -Math.PI / 2;
-		marking.position.set(0, -0.49, -i * 10);
-		road.add(marking);
+	// Add lane markings
+	const laneMarkingGeometry = new THREE.PlaneGeometry(0.3, 1);
+	const laneMarkingMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+	
+	for (let i = 0; i < 200; i++) {
+		// Center line markings
+		const centerMarking = new THREE.Mesh(centerLineGeometry, centerLineMaterial);
+		centerMarking.rotation.x = -Math.PI / 2;
+		centerMarking.position.set(0, -0.49, -i * 10);
+		road.add(centerMarking);
+		
+		// Left lane markings
+		const leftMarking = new THREE.Mesh(laneMarkingGeometry, laneMarkingMaterial);
+		leftMarking.rotation.x = -Math.PI / 2;
+		leftMarking.position.set(-2, -0.49, -i * 10 - 2);
+		road.add(leftMarking);
+		
+		// Right lane markings
+		const rightMarking = new THREE.Mesh(laneMarkingGeometry, laneMarkingMaterial);
+		rightMarking.rotation.x = -Math.PI / 2;
+		rightMarking.position.set(2, -0.49, -i * 10 - 2);
+		road.add(rightMarking);
 	}
 	
 	scene.add(road);
 }
 
-function setupScene({ scene, camera, _renderer, _player, _controllers }) {
+function setupScene({ scene, camera, _renderer, _player, _controllers, controls }) {
 	// Create road
 	createRoad(scene);
 	
@@ -216,8 +238,8 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 	});
 
 	scene.add(scoreText);
-	scoreText.position.set(0, 0.67, -1.44);
-	scoreText.rotateX(-Math.PI / 3.3);
+	scoreText.position.set(0, 1.5, -2); // Position at the top of the screen
+	scoreText.rotateX(-Math.PI / 6); // Adjust rotation for better visibility
 	updateScoreDisplay();
 
 	// Load and set up positional audio
@@ -237,11 +259,53 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 		scoreText.add(scoreSound);
 	});
 
+	// Mouse drag rotation variables
+	let isDragging = false;
+	let previousMouseX = 0;
+	let previousMouseY = 0;
+	let cameraRotationY = 0;
+	let cameraRotationX = 0;
+
 	// Setup mouse controls
+	window.addEventListener('mousedown', (event) => {
+		isDragging = true;
+		previousMouseX = event.clientX;
+		previousMouseY = event.clientY;
+		
+		// Disable OrbitControls when starting drag
+		if (controls) {
+			controls.enabled = false;
+		}
+	});
+
 	window.addEventListener('mousemove', (event) => {
-		// Normalize mouse coordinates to -1 to +1
+		// Handle camera rotation with mouse drag
+		if (isDragging) {
+			const deltaX = event.clientX - previousMouseX;
+			const deltaY = event.clientY - previousMouseY;
+			
+			// Adjust camera rotation based on mouse movement
+			cameraRotationY -= deltaX * 0.01; // Horizontal rotation
+			cameraRotationX -= deltaY * 0.01; // Vertical rotation
+			
+			// Limit vertical rotation to prevent flipping
+			cameraRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotationX));
+			
+			// Apply rotation to camera
+			camera.rotation.y = cameraRotationY;
+			camera.rotation.x = cameraRotationX;
+			
+			previousMouseX = event.clientX;
+			previousMouseY = event.clientY;
+		}
+		
+		// Also update mouse coordinates for shooting
 		mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
 		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+	});
+
+	window.addEventListener('mouseup', () => {
+		isDragging = false;
 	});
 
 	window.addEventListener('click', (_event) => {
@@ -273,28 +337,56 @@ function setupScene({ scene, camera, _renderer, _player, _controllers }) {
 			fireBullet(scene, blasterWorldPosition, quaternion);
 		}
 	});
+	
+	// Re-enable OrbitControls when exiting mouse mode
+	window.addEventListener('keydown', (event) => {
+		if (isMouseMode && event.key === 'Escape') {
+			isMouseMode = false;
+			if (mouseBlaster && mouseBlaster.parent === camera) {
+				camera.remove(mouseBlaster);
+			}
+			// Re-enable OrbitControls
+			if (controls) {
+				controls.enabled = true;
+			}
+			// Reset camera rotation
+			cameraRotationY = 0;
+			cameraRotationX = 0;
+			camera.rotation.set(0, 0, 0);
+		}
+	});
 }
 
 function onFrame(
 	delta,
 	_time,
-	{ scene, camera, _renderer, _player, controllers },
+	{ scene, camera, _renderer, player, controllers },
 ) {
-	// Update road position for forward movement
-	roadPosition += roadSpeed * delta;
+	// Update player position for forward movement
+	playerPosition += playerSpeed * delta;
+	player.position.z = -playerPosition;
+	
+	// Move the road to stay centered on the player
 	if (road) {
-		road.position.z = -roadPosition;
+		road.position.z = -playerPosition;
+	}
+	
+	// Update cowboy orientations to face the player
+	for (let i = 0; i < cowboys.length; i++) {
+		const cowboy = cowboys[i];
+		// Make cowboys face the player's current position
+		cowboy.lookAt(0, 0, -playerPosition);
 	}
 	
 	// Spawn new cowboys periodically
-	if (cowboyGltf && cowboys.length < 10 && Math.random() < 0.02) {
+	if (cowboyGltf && cowboys.length < 20 && Math.random() < 0.1) {
 		spawnCowboy(scene);
 	}
 	
 	// Remove cowboys that are too far behind
 	for (let i = cowboys.length - 1; i >= 0; i--) {
 		const cowboy = cowboys[i];
-		if (cowboy.position.z > -roadPosition + 20) { // 20 units behind player
+		if (cowboy.position.z > -playerPosition + 15) { // 15 units behind player
 			scene.remove(cowboy);
 			cowboys.splice(i, 1);
 			if (cowboyMixers[i]) {
