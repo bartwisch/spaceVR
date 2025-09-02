@@ -39,7 +39,8 @@ let cowboyGltf = null;
 // Road and movement
 let road = null;
 let backgroundPlane = null;
-let playerPosition = 0;
+window.playerPosition = 0; // Make it globally accessible
+const playerSpeed = 1.5; // Player walking speed
 
 // Mouse controls
 let mouseBlaster = null;
@@ -91,16 +92,16 @@ function spawnCowboy(scene) {
 	const side = Math.random() > 0.5 ? 1 : -1; // Left or right side
 	const distanceFromRoad = 3 + Math.random() * 2; // 3-5 units from road center
 	
-	// Use playerPosition for positioning
+	// Use window.playerPosition for positioning
 	cowboy.position.set(
 		side * distanceFromRoad,    // X: left or right of road
 		0,                          // Y: ground level
-		-playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
+		-window.playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
 	);
 	
 	// Make the cowboy face the player's blaster position
 	// Initially point toward a default position, will be updated in onFrame
-	cowboy.lookAt(0, 1.6, -playerPosition); // Default to player's eye level
+	cowboy.lookAt(0, 1.6, -window.playerPosition); // Default to player's eye level
 	
 	cowboy.scale.setScalar(1.2);
 	scene.add(cowboy);
@@ -109,8 +110,15 @@ function spawnCowboy(scene) {
 	console.log('Cowboy added to scene at position:', cowboy.position);
 	console.log('Total cowboys:', cowboys.length);
 
-	// Store the cowboy for weapon attachment in the next frame
-	// This gives the model time to be fully processed
+	// Store shooting interval for this cowboy
+	const shootInterval = setInterval(() => {
+		// Shoot at the player every 3 seconds
+		shootAtPlayer(cowboy, scene);
+	}, 3000);
+	
+	// Store the interval ID so we can clear it later
+	cowboy.userData.shootInterval = shootInterval;
+
 	setTimeout(() => {
 		attachWeaponToCowboy(cowboy);
 	}, 100);
@@ -212,6 +220,49 @@ function attachWeaponToCowboy(cowboy) {
 	} else {
 		console.log('No blaster found in blasterGroup');
 	}
+}
+
+function shootAtPlayer(cowboy, scene) {
+	// Check if cowboy is still alive
+	if (cowboy.userData.hasPlayedDeath) {
+		return;
+	}
+	
+	// Get cowboy's position
+	const cowboyPosition = new THREE.Vector3();
+	cowboy.getWorldPosition(cowboyPosition);
+	
+	// Get player's position (we'll use the camera position)
+	const playerPos = new THREE.Vector3();
+	// We'll need to pass the camera somehow, let's assume it's available globally
+	// For now, let's use a fixed position for testing
+	playerPos.set(0, 1.6, -window.playerPosition);
+	
+	// Calculate direction from cowboy to player
+	const direction = new THREE.Vector3().subVectors(playerPos, cowboyPosition).normalize();
+	
+	// Create a bullet
+	const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+	const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+	const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+	
+	// Position bullet at cowboy's position
+	bullet.position.copy(cowboyPosition);
+	
+	// Set bullet velocity
+	const bulletSpeed = 10;
+	bullet.userData = {
+		velocity: direction.multiplyScalar(bulletSpeed),
+		timeToLive: 5 // Bullet disappears after 5 seconds
+	};
+	
+	scene.add(bullet);
+	
+	// Store bullet for updates
+	if (!window.cowboyBullets) window.cowboyBullets = [];
+	window.cowboyBullets.push(bullet);
+	
+	console.log('Cowboy shot at player');
 }
 
 function fireBullet(scene, position, quaternion) {
@@ -521,7 +572,7 @@ function onFrame(
 ) {
 	// Update player position for forward movement
 	const playerSpeed = 1.5; // Player walking speed
-	playerPosition += playerSpeed * delta;
+	window.playerPosition += playerSpeed * delta;
 	
 	// --- Fly Controls (replaces automatic movement) ---
     const FLY_SPEED = 10;
@@ -548,14 +599,14 @@ function onFrame(
     }
 	
 	// Update player position tracking
-	playerPosition = -player.position.z;
+	window.playerPosition = -player.position.z;
 	
 	// Move the road and background to stay centered on the player
 	if (road) {
-		road.position.z = player.position.z;
+		road.position.z = -window.playerPosition;
 	}
 	if (backgroundPlane) {
-		backgroundPlane.position.z = player.position.z - 150;
+		backgroundPlane.position.z = -window.playerPosition - 150;
 	}
 	
 	// Update cowboys: movement, orientation, and animations
@@ -688,7 +739,11 @@ function onFrame(
 	// Remove cowboys that are too far behind
 	for (let i = cowboys.length - 1; i >= 0; i--) {
 		const cowboy = cowboys[i];
-		if (cowboy.position.z > -playerPosition + 15) { // 15 units behind player
+		if (cowboy.position.z > -window.playerPosition + 15) { // 15 units behind player
+			// Clear the shooting interval
+			if (cowboy.userData.shootInterval) {
+				clearInterval(cowboy.userData.shootInterval);
+			}
 			scene.remove(cowboy);
 			cowboys.splice(i, 1);
 			if (cowboyMixers[i]) {
@@ -796,6 +851,11 @@ function onFrame(
 								return;
 							}
 
+							// Clear the shooting interval
+							if (cowboy.userData.shootInterval) {
+								clearInterval(cowboy.userData.shootInterval);
+							}
+							
 							scene.remove(cowboy);
 							cowboys.splice(currentIndex, 1);
 							console.log('Cowboys array length after removal:', cowboys.length);
@@ -812,6 +872,10 @@ function onFrame(
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
 						console.log('Removing cowboy from scene');
+						// Clear the shooting interval
+						if (cowboy.userData.shootInterval) {
+							clearInterval(cowboy.userData.shootInterval);
+						}
 						scene.remove(cowboy);
 						cowboys.splice(index, 1);
 						console.log('Cowboys array length after removal:', cowboys.length);
@@ -838,6 +902,27 @@ function onFrame(
 			cowboyData.mixer.update(delta);
 		}
 	});
+	
+	// Update cowboy bullets
+	if (window.cowboyBullets) {
+		for (let i = window.cowboyBullets.length - 1; i >= 0; i--) {
+			const bullet = window.cowboyBullets[i];
+			
+			// Update bullet position
+			bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(delta));
+			
+			// Update TTL
+			bullet.userData.timeToLive -= delta;
+			
+			// Remove bullet if TTL expired
+			if (bullet.userData.timeToLive <= 0) {
+				scene.remove(bullet);
+				window.cowboyBullets.splice(i, 1);
+			}
+			
+			// TODO: Add collision detection with player
+		}
+	}
 	
 	gsap.ticker.tick(delta);
 }
