@@ -286,14 +286,17 @@ function setupScene({ scene, camera, _renderer, _player, _controllers, controls 
 			
 			// Adjust camera rotation based on mouse movement
 			cameraRotationY -= deltaX * 0.01; // Horizontal rotation
-			cameraRotationX -= deltaY * 0.01; // Vertical rotation
+			cameraRotationX -= deltaY * 0.01; // Vertical rotation (standard - moving mouse up looks up)
 			
 			// Limit vertical rotation to prevent flipping
 			cameraRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotationX));
 			
-			// Apply rotation to camera
-			camera.rotation.y = cameraRotationY;
-			camera.rotation.x = cameraRotationX;
+			// Apply rotation to camera using quaternions for stability
+			const quatX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), cameraRotationX);
+			const quatY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotationY);
+			
+			// Combine rotations
+			camera.quaternion.copy(quatY).multiply(quatX);
 			
 			previousMouseX = event.clientX;
 			previousMouseY = event.clientY;
@@ -352,7 +355,7 @@ function setupScene({ scene, camera, _renderer, _player, _controllers, controls 
 			// Reset camera rotation
 			cameraRotationY = 0;
 			cameraRotationX = 0;
-			camera.rotation.set(0, 0, 0);
+			camera.quaternion.set(0, 0, 0, 1); // Reset to identity quaternion
 		}
 	});
 }
