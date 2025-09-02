@@ -31,6 +31,22 @@ const AVOIDANCE_RADIUS = 3.0; // For cowboy-cowboy avoidance
 const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For cowboy-obstacle avoidance
 const AVOIDANCE_STRENGTH = 3.0; // Increased strength
 
+// Helper to smoothly transition between animations
+function switchToAction(cowboyData, action, duration = 0.3) {
+	if (!action || cowboyData.currentAction === action) {
+		return;
+	}
+
+	const lastAction = cowboyData.currentAction;
+	cowboyData.currentAction = action;
+
+	if (lastAction) {
+		lastAction.fadeOut(duration);
+	}
+
+	action.reset().setEffectiveWeight(1).fadeIn(duration).play();
+}
+
 // Cowboy enemies
 const cowboys = [];
 const cowboyMixers = [];
@@ -67,169 +83,6 @@ function updateScoreDisplay() {
 	scoreText.sync();
 }
 
-function spawnCowboy(scene) {
-	if (!cowboyGltf || blasterGroup.children.length === 0) {
-		// Also check if blaster is loaded
-		console.log('No cowboy or blaster GLTF loaded yet');
-		console.log('BlasterGroup children count:', blasterGroup.children.length);
-		if (blasterGroup.children.length > 0) {
-			console.log('First blaster child:', blasterGroup.children[0]);
-		}
-		return;
-	}
-
-	console.log('Spawning cowboy...');
-	console.log('BlasterGroup children count:', blasterGroup.children.length);
-	if (blasterGroup.children.length > 0) {
-		console.log('First blaster child:', blasterGroup.children[0]);
-	}
-	
-	// Properly clone the GLTF scene with animations using SkeletonUtils
-	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
-	
-	// Set position on either side of the road, close to the player
-	const side = Math.random() > 0.5 ? 1 : -1; // Left or right side
-	const distanceFromRoad = 3 + Math.random() * 2; // 3-5 units from road center
-	
-	// Use playerPosition for positioning
-	cowboy.position.set(
-		side * distanceFromRoad,    // X: left or right of road
-		0,                          // Y: ground level
-		-playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
-	);
-	
-	// Make the cowboy face the player's blaster position
-	// Initially point toward a default position, will be updated in onFrame
-	cowboy.lookAt(0, 1.6, -playerPosition); // Default to player's eye level
-	
-	cowboy.scale.setScalar(1.2);
-	scene.add(cowboy);
-	cowboys.push(cowboy);
-	
-	// Create a visual arrow to show where the cowboy is looking
-	const arrowDirection = new THREE.Vector3(0, 1.6, -playerPosition).sub(cowboy.position).normalize();
-	const arrowOrigin = new THREE.Vector3().copy(cowboy.position);
-	arrowOrigin.y += 1.5; // Position arrow at cowboy's eye level
-	
-	const arrowLength = 3;
-	const arrowColor = 0xff0000; // Red color
-	
-	const arrowHelper = new THREE.ArrowHelper(arrowDirection, arrowOrigin, arrowLength, arrowColor);
-	scene.add(arrowHelper);
-	
-	// Store arrow reference with cowboy for updates
-	cowboy.userData.arrow = arrowHelper;
-	
-	// --- Attach weapon to hand ---
-	let rightHandNode = null;
-	cowboy.traverse((object) => {
-		// Log all bone names to find the correct one for the hand
-		if (object.isBone) {
-			console.log(`Found Bone: ${object.name}`);
-		}
-
-		// --- GUESSING BONE NAME --- 
-		// Common names: 'RightHand', 'hand_r', 'bip01_r_hand', 'RightHand_end'
-		// Let's check for multiple possible names
-		if (object.isBone && (object.name === 'RightHand' || object.name === 'hand_r' || object.name === 'bip01_r_hand' || object.name === 'RightHand_end')) {
-			// Using a guess based on common humanoid rigs
-			rightHandNode = object;
-		}
-	});
-
-	if (rightHandNode) {
-		console.log('Found right hand bone, attaching weapon.');
-		if (blasterGroup.children.length > 0) {
-			const cowboyWeapon = blasterGroup.children[0].clone(); // Clone the actual mesh
-
-			// Adjust scale, position, and rotation to fit in the hand
-			cowboyWeapon.scale.setScalar(0.8);
-			cowboyWeapon.position.set(0.05, 0.1, 0); // x, y, z offset from hand bone
-			cowboyWeapon.rotation.set(Math.PI / 2, 0, 0); // Rotate to align with hand
-
-			rightHandNode.add(cowboyWeapon);
-			console.log('Successfully attached weapon to cowboy hand');
-		} else {
-			console.log('No blaster found in blasterGroup, cannot attach weapon');
-		}
-	} else {
-		console.log('Could not find the right hand bone to attach a weapon.');
-		// Let's also try to find any node that might contain "hand" in its name
-		cowboy.traverse((object) => {
-			if (object.name && object.name.toLowerCase().includes('hand')) {
-				console.log('Found node with "hand" in name:', object.name);
-			}
-		});
-	}
-	
-	console.log('Cowboy added to scene at position:', cowboy.position);
-	console.log('Total cowboys:', cowboys.length);
-
-	// Setup animation mixer for this cowboy
-	if (cowboyGltf.animations && cowboyGltf.animations.length > 0) {
-		const mixer = new THREE.AnimationMixer(cowboy);
-		const cowboyData = {
-			mixer: mixer,
-			animations: cowboyGltf.animations,
-			currentAction: null,
-			idleAction: null,
-			deathAction: null,
-			walkAction: null,
-			runAction: null
-		};
-		cowboyMixers.push(cowboyData);
-		
-		console.log('Setting up animations, found:', cowboyGltf.animations.length, 'animations');
-		
-		// Find and play wink animation (or first available animation)
-		let idleAction = null;
-		let deathAction = null;
-		let walkAction = null;
-		let runAction = null;
-		
-		for (let animation of cowboyGltf.animations) {
-			const animName = animation.name.toLowerCase();
-			if (animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
-				idleAction = mixer.clipAction(animation);
-			} else if (animName.includes('dead')) {
-				deathAction = mixer.clipAction(animation);
-			} else if (animName.includes('walk')) {
-				walkAction = mixer.clipAction(animation);
-			} else if (animName.includes('run')) {
-				runAction = mixer.clipAction(animation);
-			}
-		}
-		
-		// If no specific animations found, use first animation as idle
-		if (!idleAction && cowboyGltf.animations.length > 0) {
-			idleAction = mixer.clipAction(cowboyGltf.animations[0]);
-			console.log('Using first animation as idle:', cowboyGltf.animations[0].name);
-		}
-		
-		// Store all animation references
-		cowboyData.idleAction = idleAction;
-		cowboyData.deathAction = deathAction;
-		cowboyData.walkAction = walkAction;
-		cowboyData.runAction = runAction;
-		
-		// Start with idle animation
-		if (idleAction) {
-			idleAction.setLoop(THREE.LoopRepeat, Infinity);
-			idleAction.play();
-			cowboyData.currentAction = idleAction;
-			console.log('Idle animation started');
-		}
-		
-		// Store animation references in userData
-		cowboy.userData = {
-			...cowboy.userData,
-			idleAction: idleAction,
-			deathAction: deathAction,
-			walkAction: walkAction,
-			runAction: runAction,
-			hasPlayedDeath: false
-		};
-		
 	} else {
 		console.log('No animations found for cowboy');
 	}
@@ -593,61 +446,16 @@ function onFrame(
 		if (distanceToPlayer > WALK_THRESHOLD) {
 			moveDirection.subVectors(lookAtTarget, cowboy.position).normalize();
 			speed = RUN_SPEED;
-			// Switch to run animation
-			if (cowboyData.runAction) {
-				if (cowboyData.currentAction !== cowboyData.runAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
-					}
-					cowboyData.runAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.runAction;
-				}
-			} else if (cowboyData.idleAction) {
-				// Fallback to idle if no run animation
-				if (cowboyData.currentAction !== cowboyData.idleAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
-					}
-					cowboyData.idleAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.idleAction;
-				}
-			}
+			switchToAction(cowboyData, cowboyData.runAction);
 
 		} else if (distanceToPlayer > ATTACK_THRESHOLD) {
 			moveDirection.subVectors(lookAtTarget, cowboy.position).normalize();
 			speed = WALK_SPEED;
-			// Switch to walk animation
-			if (cowboyData.walkAction) {
-				if (cowboyData.currentAction !== cowboyData.walkAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
-					}
-					cowboyData.walkAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.walkAction;
-				}
-			} else if (cowboyData.idleAction) {
-				// Fallback to idle if no walk animation
-				if (cowboyData.currentAction !== cowboyData.idleAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
-					}
-					cowboyData.idleAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.idleAction;
-				}
-			}
+			switchToAction(cowboyData, cowboyData.walkAction);
 
 		} else {
 			speed = 0;
-			// Switch to idle animation
-			if (cowboyData.idleAction) {
-				if (cowboyData.currentAction !== cowboyData.idleAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
-					}
-					cowboyData.idleAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.idleAction;
-				}
-			}
+			switchToAction(cowboyData, cowboyData.idleAction);
 		}
 
 		// --- Collision Avoidance ---
@@ -696,10 +504,6 @@ function onFrame(
 	for (let i = cowboys.length - 1; i >= 0; i--) {
 		const cowboy = cowboys[i];
 		if (cowboy.position.z > -playerPosition + 15) { // 15 units behind player
-			// Remove the arrow helper if it exists
-			if (cowboy.userData.arrow) {
-				scene.remove(cowboy.userData.arrow);
-			}
 			scene.remove(cowboy);
 			cowboys.splice(i, 1);
 			if (cowboyMixers[i]) {
