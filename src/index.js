@@ -63,6 +63,7 @@ let isMouseMode = false;
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
 const keyStates = {};
+const obstacles = [];
 
 let score = 0;
 const scoreText = new Text();
@@ -111,20 +112,6 @@ function spawnCowboy(scene) {
 	cowboy.scale.setScalar(1.2);
 	scene.add(cowboy);
 	cowboys.push(cowboy);
-	
-	// Create a visual arrow to show where the cowboy is looking
-	const arrowDirection = new THREE.Vector3(0, 1.6, -playerPosition).sub(cowboy.position).normalize();
-	const arrowOrigin = new THREE.Vector3().copy(cowboy.position);
-	arrowOrigin.y += 1.5; // Position arrow at cowboy's eye level
-	
-	const arrowLength = 3;
-	const arrowColor = 0xff0000; // Red color
-	
-	const arrowHelper = new THREE.ArrowHelper(arrowDirection, arrowOrigin, arrowLength, arrowColor);
-	scene.add(arrowHelper);
-	
-	// Store arrow reference with cowboy for updates
-	cowboy.userData.arrow = arrowHelper;
 	
 	console.log('Cowboy added to scene at position:', cowboy.position);
 	console.log('Total cowboys:', cowboys.length);
@@ -303,11 +290,13 @@ function populateScenery(scene) {
 			tree.position.set(xPos, 0, zPos);
 			tree.rotation.y = Math.random() * Math.PI;
 			scene.add(tree);
+			obstacles.push(tree);
 		} else { // 30% chance of a house
 			const house = createHouse();
 			house.position.set(xPos, 0, zPos);
 			house.rotation.y = Math.random() * Math.PI;
 			scene.add(house);
+			obstacles.push(house);
 		}
 	}
 }
@@ -578,6 +567,7 @@ function onFrame(
 
 		// --- Collision Avoidance ---
 		const avoidanceVector = new THREE.Vector3();
+		// Avoid other cowboys
 		for (let j = 0; j < cowboys.length; j++) {
 			if (i === j) continue; // Don't check against self
 
@@ -593,6 +583,16 @@ function onFrame(
 			}
 		}
 
+		// Avoid obstacles (trees, houses)
+		const OBSTACLE_AVOIDANCE_RADIUS = 6.0;
+		for (const obstacle of obstacles) {
+			const distanceToObstacle = cowboy.position.distanceTo(obstacle.position);
+			if (distanceToObstacle < OBSTACLE_AVOIDANCE_RADIUS) {
+				const awayVector = new THREE.Vector3().subVectors(cowboy.position, obstacle.position).normalize();
+				avoidanceVector.add(awayVector);
+			}
+		}
+
 		// Combine movement and avoidance vectors
 		const intendedMove = moveDirection.multiplyScalar(speed);
 		const avoidanceMove = avoidanceVector.multiplyScalar(AVOIDANCE_STRENGTH);
@@ -601,15 +601,6 @@ function onFrame(
 
 		// Apply the final movement
 		cowboy.position.add(totalMove.multiplyScalar(delta));
-
-		// --- Arrow Helper Update ---
-		if (cowboy.userData.arrow) {
-			const arrowPosition = new THREE.Vector3().copy(cowboy.position);
-			arrowPosition.y += 1.5;
-			cowboy.userData.arrow.position.copy(arrowPosition);
-			const cowboyDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
-			cowboy.userData.arrow.setDirection(cowboyDirection);
-		}
 	}
 	
 	// Spawn new cowboys periodically
@@ -621,10 +612,6 @@ function onFrame(
 	for (let i = cowboys.length - 1; i >= 0; i--) {
 		const cowboy = cowboys[i];
 		if (cowboy.position.z > -playerPosition + 15) { // 15 units behind player
-			// Remove the arrow helper if it exists
-			if (cowboy.userData.arrow) {
-				scene.remove(cowboy.userData.arrow);
-			}
 			scene.remove(cowboy);
 			cowboys.splice(i, 1);
 			if (cowboyMixers[i]) {
