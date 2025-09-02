@@ -106,20 +106,9 @@ function spawnCowboy(scene) {
 	scene.add(cowboy);
 	cowboys.push(cowboy);
 	
-	// Create a visual arrow to show where the cowboy is looking
-	const arrowDirection = new THREE.Vector3(0, 1.6, -playerPosition).sub(cowboy.position).normalize();
-	const arrowOrigin = new THREE.Vector3().copy(cowboy.position);
-	arrowOrigin.y += 1.5; // Position arrow at cowboy's eye level
-	
-	const arrowLength = 3;
-	const arrowColor = 0xff0000; // Red color
-	
-	const arrowHelper = new THREE.ArrowHelper(arrowDirection, arrowOrigin, arrowLength, arrowColor);
-	scene.add(arrowHelper);
-	
-	// Store arrow reference with cowboy for updates
-	cowboy.userData.arrow = arrowHelper;
-	
+	console.log('Cowboy added to scene at position:', cowboy.position);
+	console.log('Total cowboys:', cowboys.length);
+
 	// --- Attach weapon to hand ---
 	let rightHandNode = null;
 	cowboy.traverse((object) => {
@@ -696,10 +685,6 @@ function onFrame(
 	for (let i = cowboys.length - 1; i >= 0; i--) {
 		const cowboy = cowboys[i];
 		if (cowboy.position.z > -playerPosition + 15) { // 15 units behind player
-			// Remove the arrow helper if it exists
-			if (cowboy.userData.arrow) {
-				scene.remove(cowboy.userData.arrow);
-			}
 			scene.remove(cowboy);
 			cowboys.splice(i, 1);
 			if (cowboyMixers[i]) {
@@ -807,10 +792,6 @@ function onFrame(
 								return;
 							}
 
-							// Remove the arrow helper if it exists
-							if (cowboy.userData.arrow) {
-								scene.remove(cowboy.userData.arrow);
-							}
 							scene.remove(cowboy);
 							cowboys.splice(currentIndex, 1);
 							console.log('Cowboys array length after removal:', cowboys.length);
@@ -827,10 +808,6 @@ function onFrame(
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
 						console.log('Removing cowboy from scene');
-						// Remove the arrow helper if it exists
-						if (cowboy.userData.arrow) {
-							scene.remove(cowboy.userData.arrow);
-						}
 						scene.remove(cowboy);
 						cowboys.splice(index, 1);
 						console.log('Cowboys array length after removal:', cowboys.length);
