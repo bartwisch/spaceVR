@@ -22,6 +22,27 @@ const bulletTimeToLive = 3; // Increased TTL to 3 seconds
 
 const blasterGroup = new THREE.Group();
 
+const RUN_SPEED = 2.5;
+const WALK_SPEED = 0.8;
+const ATTACK_THRESHOLD = 5; // Distance to stop and attack (or idle)
+const WALK_THRESHOLD = 12; // Distance to switch from running to walking
+
+// Helper to smoothly transition between animations
+function switchToAction(cowboyData, action, duration = 0.3) {
+	if (!action || cowboyData.currentAction === action) {
+		return;
+	}
+
+	const lastAction = cowboyData.currentAction;
+	cowboyData.currentAction = action;
+
+	if (lastAction) {
+		lastAction.fadeOut(duration);
+	}
+
+	action.reset().setEffectiveWeight(1).fadeIn(duration).play();
+}
+
 // Cowboy enemies
 const cowboys = [];
 const cowboyMixers = [];
@@ -105,48 +126,53 @@ function spawnCowboy(scene) {
 	// Setup animation mixer for this cowboy
 	if (cowboyGltf.animations && cowboyGltf.animations.length > 0) {
 		const mixer = new THREE.AnimationMixer(cowboy);
-		const cowboyData = {
-			mixer: mixer,
-			animations: cowboyGltf.animations,
-			currentAction: null
-		};
-		cowboyMixers.push(cowboyData);
 		
 		console.log('Setting up animations, found:', cowboyGltf.animations.length, 'animations');
 		
-		// Find and play wink animation (or first available animation)
-		let idleAction = null;
-		let deathAction = null;
+		// Find available animations
+		let idleAction, deathAction, walkAction, runAction;
 		
-		for (let animation of cowboyGltf.animations) {
+		for (const animation of cowboyGltf.animations) {
 			const animName = animation.name.toLowerCase();
-			if (animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
-				idleAction = mixer.clipAction(animation);
+			console.log(`Found animation in cowboy model: ${animation.name}`);
+			if (animName.includes('walk')) {
+				walkAction = mixer.clipAction(animation);
+			} else if (animName.includes('run')) {
+				runAction = mixer.clipAction(animation);
 			} else if (animName.includes('dead')) {
 				deathAction = mixer.clipAction(animation);
+			} else {
+				// Use the first suitable animation as idle
+				if (!idleAction) {
+					idleAction = mixer.clipAction(animation);
+				}
 			}
 		}
 		
-		// If no specific animations found, use first animation as idle
-		if (!idleAction && cowboyGltf.animations.length > 0) {
-			idleAction = mixer.clipAction(cowboyGltf.animations[0]);
-			console.log('Using first animation as idle:', cowboyGltf.animations[0].name);
-		}
-		
+		const cowboyData = {
+			mixer: mixer,
+			animations: cowboyGltf.animations,
+			currentAction: null,
+			// Store actions in the mixer data object
+			idleAction,
+			deathAction,
+			walkAction,
+			runAction,
+		};
+		cowboyMixers.push(cowboyData);
+
+		// Start with idle animation
 		if (idleAction) {
 			idleAction.setLoop(THREE.LoopRepeat, Infinity);
 			idleAction.play();
 			cowboyData.currentAction = idleAction;
 			console.log('Idle animation started');
+		} else {
+			console.log('Could not find a suitable idle animation.');
 		}
 		
-		// Store death animation reference
-		cowboy.userData = {
-			...cowboy.userData,
-			idleAction: idleAction,
-			deathAction: deathAction,
-			hasPlayedDeath: false
-		};
+		// Store a flag for death state on the model's userData
+		cowboy.userData.hasPlayedDeath = false;
 		
 	} else {
 		console.log('No animations found for cowboy');
@@ -399,32 +425,51 @@ function onFrame(
 		road.position.z = -playerPosition;
 	}
 	
-	// Update cowboy orientations to face the player's blaster
+	// Update cowboys: movement, orientation, and animations
 	for (let i = 0; i < cowboys.length; i++) {
 		const cowboy = cowboys[i];
-		
-		// Get the player's camera world position
+		const cowboyData = cowboyMixers[i];
+
+		// Skip logic for cowboys that are "dead" and animating
+		if (cowboy.userData.hasPlayedDeath) {
+			continue;
+		}
+
+		// --- Orientation ---
 		const playerTargetPosition = new THREE.Vector3();
 		camera.getWorldPosition(playerTargetPosition);
-
-		// Create a target on the same horizontal plane as the cowboy to prevent tilting
 		const lookAtTarget = new THREE.Vector3(
 			playerTargetPosition.x,
 			cowboy.position.y,
 			playerTargetPosition.z,
 		);
-
-		// Make cowboys face the player's direction but stay upright
 		cowboy.lookAt(lookAtTarget);
-		
-		// Update the arrow to show where the cowboy is looking
+
+		// --- Movement & Animation ---
+		const distanceToPlayer = cowboy.position.distanceTo(playerTargetPosition);
+
+		if (distanceToPlayer > WALK_THRESHOLD) {
+			// Move towards player (running)
+			const moveDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
+			cowboy.position.add(moveDirection.multiplyScalar(RUN_SPEED * delta));
+			switchToAction(cowboyData, cowboyData.runAction);
+
+		} else if (distanceToPlayer > ATTACK_THRESHOLD) {
+			// Move towards player (walking)
+			const moveDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
+			cowboy.position.add(moveDirection.multiplyScalar(WALK_SPEED * delta));
+			switchToAction(cowboyData, cowboyData.walkAction);
+
+		} else {
+			// Close enough, stop and idle
+			switchToAction(cowboyData, cowboyData.idleAction);
+		}
+
+		// --- Arrow Helper Update ---
 		if (cowboy.userData.arrow) {
-			// Update arrow position to match cowboy's position (at eye level)
 			const arrowPosition = new THREE.Vector3().copy(cowboy.position);
-			arrowPosition.y += 1.5; // Position arrow at cowboy's eye level
+			arrowPosition.y += 1.5;
 			cowboy.userData.arrow.position.copy(arrowPosition);
-			
-			// Update arrow direction to match cowboy's facing direction
 			const cowboyDirection = new THREE.Vector3().subVectors(lookAtTarget, cowboy.position).normalize();
 			cowboy.userData.arrow.setDirection(cowboyDirection);
 		}
