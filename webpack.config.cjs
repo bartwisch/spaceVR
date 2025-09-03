@@ -7,6 +7,7 @@ module.exports = {
 	mode: 'development',
 	entry: {
 		index: './src/index.js',
+		'test-cowboy': './src/test-cowboy.js',
 	},
 	resolve: {
 		alias: {
@@ -40,6 +41,13 @@ module.exports = {
 		}),
 		new HtmlWebpackPlugin({
 			template: './src/index.html',
+			filename: 'index.html',
+			chunks: ['index'],
+		}),
+		new HtmlWebpackPlugin({
+			template: './src/test-cowboy.html',
+			filename: 'test-cowboy.html',
+			chunks: ['test-cowboy'],
 		}),
 		new CopyPlugin({
 			patterns: [

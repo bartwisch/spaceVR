@@ -40,7 +40,6 @@ let cowboyGltf = null;
 let road = null;
 let backgroundPlane = null;
 window.playerPosition = 0; // Make it globally accessible
-const playerSpeed = 1.5; // Player walking speed
 let globalCamera = null; // Global reference to camera for cowboy targeting
 
 // Mouse controls
@@ -206,15 +205,85 @@ function attachWeaponToCowboy(cowboy) {
 		const cowboyWeapon = blasterGroup.children[0].clone();
 		console.log('Cowboy weapon cloned');
 		
-		// Position the weapon where the right hand would be
-		// This is a guess based on typical humanoid proportions
-		cowboyWeapon.scale.setScalar(0.6);
-		cowboyWeapon.position.set(0.4, 1.8, 0.2); // x, y, z - adjust to right hand position
-		cowboyWeapon.rotation.set(0, Math.PI/2, 0); // Rotate to face forward
+		// Log all bones in the skeleton to help debug
+		let rightHandBone = null;
+		const allBones = [];
 		
-		// Add the weapon directly to the cowboy
-		cowboy.add(cowboyWeapon);
-		console.log('Successfully attached weapon to cowboy (direct attachment)');
+		cowboy.traverse((child) => {
+			if (child.isBone) {
+				allBones.push(child.name);
+				const boneName = child.name.toLowerCase();
+				
+				// Extended search for right hand bone names
+				if (boneName.includes('hand') && (boneName.includes('right') || boneName.includes('r')) ||
+					boneName.includes('hand_r') ||
+					boneName.includes('righthand') ||
+					boneName.includes('hand.r') ||
+					boneName === 'hand_right' ||
+					boneName === 'r_hand' ||
+					boneName.includes('wrist') && (boneName.includes('right') || boneName.includes('r')) ||
+					boneName.includes('palm') && (boneName.includes('right') || boneName.includes('r'))) {
+					rightHandBone = child;
+					console.log('Found right hand bone:', child.name);
+				}
+			}
+		});
+		
+		console.log('All bones found:', allBones);
+		
+		cowboyWeapon.scale.setScalar(1.5); // Much larger weapon for visibility
+		
+		if (rightHandBone) {
+			// Attach to the right hand bone
+			console.log('Attaching weapon to right hand bone:', rightHandBone.name);
+			
+			// Better positioning and rotation for the weapon
+			cowboyWeapon.position.set(0, -0.1, 0.1); // Forward and down slightly
+			cowboyWeapon.rotation.set(0, Math.PI/2, 0); // Point weapon forward
+			
+			rightHandBone.add(cowboyWeapon);
+			console.log('Successfully attached weapon to right hand bone');
+		} else {
+			// Enhanced fallback: try to find ANY hand bone
+			let anyHandBone = null;
+			cowboy.traverse((child) => {
+				if (child.isBone) {
+					const boneName = child.name.toLowerCase();
+					if (boneName.includes('hand') || boneName.includes('wrist') || boneName.includes('palm')) {
+						anyHandBone = child;
+						console.log('Found any hand bone for fallback:', child.name);
+					}
+				}
+			});
+			
+			if (anyHandBone) {
+				console.log('Using any hand bone as fallback:', anyHandBone.name);
+				cowboyWeapon.position.set(0, -0.1, 0.1);
+				cowboyWeapon.rotation.set(0, Math.PI/2, 0);
+				anyHandBone.add(cowboyWeapon);
+				console.log('Successfully attached weapon to fallback hand bone');
+			} else {
+				// Last resort: attach to cowboy with better estimated hand position
+				console.log('No hand bones found, using position-based fallback');
+				cowboyWeapon.position.set(0.6, 1.0, 0.3); // Right side, at chest height
+				cowboyWeapon.rotation.set(0, Math.PI/2, 0);
+				cowboy.add(cowboyWeapon);
+				console.log('Successfully attached weapon using position fallback');
+			}
+		}
+		
+		// Make weapon more visible
+		cowboyWeapon.traverse((child) => {
+			if (child.isMesh) {
+				child.material = child.material.clone();
+				child.material.emissive = new THREE.Color(0x660000); // Red glow for cowboy weapons
+				child.material.color = new THREE.Color(0xff4444); // Bright red color
+				child.material.metalness = 0.7;
+				child.material.roughness = 0.3;
+				child.castShadow = true;
+				child.receiveShadow = true;
+			}
+		});
 		
 		// Log the weapon's world position to verify it's visible
 		const worldPos = new THREE.Vector3();
