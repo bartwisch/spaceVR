@@ -21,6 +21,11 @@ const bulletSpeed = 15; // Increased speed
 const bulletTimeToLive = 3; // Increased TTL to 3 seconds
 
 const blasterGroup = new THREE.Group();
+const blueBlasterGroup = new THREE.Group(); // New blue weapon group
+
+// Weapon switching
+let currentWeapon = 0; // 0 = red weapon, 1 = blue weapon
+const weapons = [blasterGroup, blueBlasterGroup];
 
 const RUN_SPEED = 2.5;
 const WALK_SPEED = 0.8;
@@ -121,10 +126,6 @@ function spawnCowboy(scene) {
 	// Store the interval ID so we can clear it later
 	cowboy.userData.shootInterval = shootInterval;
 
-	setTimeout(() => {
-		attachWeaponToCowboy(cowboy);
-	}, 100);
-
 	console.log('Cowboy added to scene at position:', cowboy.position);
 	console.log('Total cowboys:', cowboys.length);
 
@@ -198,130 +199,6 @@ function spawnCowboy(scene) {
 	}
 }
 
-function attachWeaponToCowboy(cowboy) {
-	console.log('Attaching weapon to cowboy...');
-	
-	if (blasterGroup.children.length > 0) {
-		const cowboyWeapon = blasterGroup.children[0].clone();
-		console.log('Cowboy weapon cloned');
-		
-		// Log all bones in the skeleton to help debug
-		let rightHandBone = null;
-		const allBones = [];
-		
-		cowboy.traverse((child) => {
-			if (child.isBone) {
-				allBones.push(child.name);
-				const boneName = child.name.toLowerCase();
-				
-				// Extended search for right hand bone names
-				if (boneName.includes('hand') && (boneName.includes('right') || boneName.includes('r')) ||
-					boneName.includes('hand_r') ||
-					boneName.includes('righthand') ||
-					boneName.includes('hand.r') ||
-					boneName === 'hand_right' ||
-					boneName === 'r_hand' ||
-					boneName.includes('wrist') && (boneName.includes('right') || boneName.includes('r')) ||
-					boneName.includes('palm') && (boneName.includes('right') || boneName.includes('r'))) {
-					rightHandBone = child;
-					console.log('Found right hand bone:', child.name);
-				}
-			}
-		});
-		
-		console.log('All bones found:', allBones);
-		
-		// Scale the weapon to 20% of its original size (like in test-cowboy.js)
-		cowboyWeapon.scale.setScalar(0.2);
-		
-		// Set the weapon rotation to exactly -30, 80, 30 degrees (like in test-cowboy.js)
-		cowboyWeapon.rotation.x = -30 * Math.PI / 180; // Convert degrees to radians
-		cowboyWeapon.rotation.y = 80 * Math.PI / 180;
-		cowboyWeapon.rotation.z = 30 * Math.PI / 180;
-		
-		// Enhanced fallback: try to find ANY hand bone
-		let anyHandBone = null;
-		if (!rightHandBone) {
-			cowboy.traverse((child) => {
-				if (child.isBone) {
-					const boneName = child.name.toLowerCase();
-					if (boneName.includes('hand') || boneName.includes('wrist') || boneName.includes('palm')) {
-						anyHandBone = child;
-						console.log('Found any hand bone for fallback:', child.name);
-					}
-				}
-			});
-		}
-		
-		if (rightHandBone) {
-			// Attach to the right hand bone
-			console.log('Attaching weapon to right hand bone:', rightHandBone.name);
-			
-			// Position weapon at the right hand bone with proper offset (like in test-cowboy.js)
-			const worldPos = new THREE.Vector3();
-			rightHandBone.getWorldPosition(worldPos);
-			cowboyWeapon.position.copy(worldPos);
-			
-			// Apply offset to position the weapon properly in the hand
-			cowboyWeapon.position.x += 0.05; // Move slightly to the right
-			cowboyWeapon.position.y += 0.02; // Move slightly up
-			cowboyWeapon.position.z += 0.02; // Move slightly forward
-			
-			// Add weapon to scene (not to bone) to allow for proper positioning
-			cowboy.parent.add(cowboyWeapon);
-			console.log('Successfully attached weapon to right hand bone');
-		} else if (anyHandBone) {
-			console.log('Using any hand bone as fallback:', anyHandBone.name);
-			// Position weapon at the hand bone with proper offset
-			const worldPos = new THREE.Vector3();
-			anyHandBone.getWorldPosition(worldPos);
-			cowboyWeapon.position.copy(worldPos);
-			
-			// Apply offset to position the weapon properly in the hand
-			cowboyWeapon.position.x += 0.05;
-			cowboyWeapon.position.y += 0.02;
-			cowboyWeapon.position.z += 0.02;
-			
-			// Add weapon to scene (not to bone) to allow for proper positioning
-			cowboy.parent.add(cowboyWeapon);
-			console.log('Successfully attached weapon to fallback hand bone');
-		} else {
-			// Last resort: attach to cowboy with better estimated hand position
-			console.log('No hand bones found, using position-based fallback');
-			cowboyWeapon.position.set(0.8, 1.2, 0.4); // Fallback position like in test-cowboy.js
-			cowboy.parent.add(cowboyWeapon);
-			console.log('Successfully attached weapon using position fallback');
-		}
-		
-		// Make weapon more visible
-		cowboyWeapon.traverse((child) => {
-			if (child.isMesh) {
-				child.material = child.material.clone();
-				child.material.emissive = new THREE.Color(0x660000); // Red glow for cowboy weapons
-				child.material.color = new THREE.Color(0xff4444); // Bright red color
-				child.material.metalness = 0.7;
-				child.material.roughness = 0.3;
-				child.castShadow = true;
-				child.receiveShadow = true;
-			}
-		});
-		
-		// Store weapon reference for updating position each frame
-		if (!cowboy.userData.weapons) cowboy.userData.weapons = [];
-		cowboy.userData.weapons.push({
-			weapon: cowboyWeapon,
-			bone: rightHandBone || anyHandBone
-		});
-		
-		// Log the weapon's world position to verify it's visible
-		const worldPos = new THREE.Vector3();
-		cowboyWeapon.getWorldPosition(worldPos);
-		console.log('Weapon world position:', worldPos);
-	} else {
-		console.log('No blaster found in blasterGroup');
-	}
-}
-
 function shootAtPlayer(cowboy, scene, camera) {
 	// Check if cowboy is still alive
 	if (cowboy.userData.hasPlayedDeath) {
@@ -368,9 +245,31 @@ function fireBullet(scene, position, quaternion) {
 	if (laserSound.isPlaying) laserSound.stop();
 	laserSound.play();
 
-	const bulletPrototype = blasterGroup.getObjectByName('bullet');
+	const currentBlasterGroup = weapons[currentWeapon];
+	const bulletPrototype = currentBlasterGroup.getObjectByName('bullet');
+	
 	if (bulletPrototype) {
 		const bullet = bulletPrototype.clone();
+		scene.add(bullet);
+		bullet.position.copy(position);
+		bullet.quaternion.copy(quaternion);
+
+		const directionVector = forwardVector
+			.clone()
+			.applyQuaternion(bullet.quaternion);
+		bullet.userData = {
+			velocity: directionVector.multiplyScalar(bulletSpeed),
+			timeToLive: bulletTimeToLive,
+		};
+		bullets[bullet.uuid] = bullet;
+	} else {
+		// Create bullet dynamically if no prototype exists
+		const bulletGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+		const bulletMaterial = currentWeapon === 0 ? 
+			new THREE.MeshBasicMaterial({ color: 0xff0000 }) : // Red for weapon 0
+			new THREE.MeshBasicMaterial({ color: 0x0000ff });  // Blue for weapon 1
+		const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+		
 		scene.add(bullet);
 		bullet.position.copy(position);
 		bullet.quaternion.copy(quaternion);
@@ -503,11 +402,12 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	// Add the circle as a child of the player so it moves with the player
 	player.add(ring);
 	
+	// Load models
 	const gltfLoader = new GLTFLoader();
 
 	gltfLoader.load('assets/blaster.glb', (gltf) => {
 		blasterGroup.add(gltf.scene);
-		console.log('=== BLASTER LOADED ===');
+		console.log('=== RED BLASTER LOADED ===');
 		console.log('Blaster group children count:', blasterGroup.children.length);
 		if (blasterGroup.children.length > 0) {
 			const firstChild = blasterGroup.children[0];
@@ -526,6 +426,23 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		mouseBlaster = gltf.scene.clone();
 		mouseBlaster.position.set(0.3, -0.3, -0.5);
 		mouseBlaster.scale.setScalar(0.8);
+	});
+
+	// Load blue weapon variant
+	gltfLoader.load('assets/blaster.glb', (gltf) => {
+		const blueBlaster = gltf.scene.clone();
+		
+		// Modify material to make it blue
+		blueBlaster.traverse((child) => {
+			if (child.isMesh) {
+				child.material = child.material.clone();
+				child.material.color = new THREE.Color(0x4444ff); // Blue color
+				child.material.emissive = new THREE.Color(0x000066); // Blue glow
+			}
+		});
+		
+		blueBlasterGroup.add(blueBlaster);
+		console.log('=== BLUE BLASTER LOADED ===');
 	});
 
 	// Load cowboy enemy
@@ -864,8 +781,9 @@ function onFrame(
 		}
 		
 		const { gamepad, raySpace, mesh } = controllers.right;
-		if (!raySpace.children.includes(blasterGroup)) {
-			raySpace.add(blasterGroup);
+		// Add the current weapon to the controller (start with red weapon)
+		if (!raySpace.children.includes(weapons[currentWeapon])) {
+			raySpace.add(weapons[currentWeapon]);
 			mesh.visible = false;
 		}
 		
@@ -912,21 +830,50 @@ function onFrame(
 				// Rotate the player around the Y axis
 				player.rotateY(rotationDelta);
 			}
-		}
-		
-		if (gamepad.getButtonClick(XR_BUTTONS.TRIGGER)) {
-			try {
-				gamepad.getHapticActuator(0).pulse(0.6, 100);
-			} catch {
-				// do nothing
-			}
-
-			const blasterWorldPosition = new THREE.Vector3();
-			const blasterWorldQuaternion = new THREE.Quaternion();
-			blasterGroup.getWorldPosition(blasterWorldPosition);
-			blasterGroup.getWorldQuaternion(blasterWorldQuaternion);
 			
-			fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
+			// Handle weapon switching with button press (using BUTTON_1, typically the A button)
+			if (gamepad.getButtonDown(XR_BUTTONS.BUTTON_1)) {
+				// Switch weapon
+				currentWeapon = (currentWeapon + 1) % weapons.length;
+				console.log('Switched to weapon:', currentWeapon);
+				
+				// Update the weapon model shown in the player's hand
+				if (raySpace.children.includes(blasterGroup)) {
+					raySpace.remove(blasterGroup);
+				}
+				if (raySpace.children.includes(blueBlasterGroup)) {
+					raySpace.remove(blueBlasterGroup);
+				}
+				
+				// Add the current weapon to the controller
+				raySpace.add(weapons[currentWeapon]);
+			}
+			
+			// Handle continuous fire (dauerfeuer) when trigger is held
+			if (gamepad.getButton(XR_BUTTONS.TRIGGER)) {
+				// Check if we should fire (implementing a fire rate limit)
+				if (!gamepad.userData) gamepad.userData = {};
+				if (!gamepad.userData.lastFireTime) gamepad.userData.lastFireTime = 0;
+				
+				const currentTime = Date.now();
+				const fireRate = 150; // milliseconds between shots (about 6.67 shots per second)
+				
+				if (currentTime - gamepad.userData.lastFireTime > fireRate) {
+					try {
+						gamepad.getHapticActuator(0).pulse(0.3, 50); // Lighter haptic feedback for automatic fire
+					} catch {
+						// do nothing
+					}
+					
+					const blasterWorldPosition = new THREE.Vector3();
+					const blasterWorldQuaternion = new THREE.Quaternion();
+					weapons[currentWeapon].getWorldPosition(blasterWorldPosition);
+					weapons[currentWeapon].getWorldQuaternion(blasterWorldQuaternion);
+					
+					fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
+					gamepad.userData.lastFireTime = currentTime;
+				}
+			}
 		}
 	} else {
 		// Non-VR Mode - show mouse blaster if not already visible
@@ -1047,25 +994,6 @@ function onFrame(
 	cowboyMixers.forEach(cowboyData => {
 		if (cowboyData.mixer) {
 			cowboyData.mixer.update(delta);
-		}
-	});
-	
-	// Update cowboy weapon positions to match hand bones
-	cowboys.forEach(cowboy => {
-		if (cowboy.userData.weapons) {
-			cowboy.userData.weapons.forEach(weaponData => {
-				const { weapon, bone } = weaponData;
-				if (weapon && bone) {
-					const worldPos = new THREE.Vector3();
-					bone.getWorldPosition(worldPos);
-					
-					// Apply offset to position the weapon properly in the hand
-					weapon.position.copy(worldPos);
-					weapon.position.x += 0.05; // Move slightly to the right
-					weapon.position.y += 0.02; // Move slightly up
-					weapon.position.z += 0.02; // Move slightly forward
-				}
-			});
 		}
 	});
 	
