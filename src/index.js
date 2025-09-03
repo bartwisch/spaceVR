@@ -900,6 +900,20 @@ function onFrame(
 			}
 		}
 		
+		// Handle right thumbstick rotation
+		if (gamepad) {
+			const rightThumbstickX = gamepad.getAxis(XR_AXES.THUMBSTICK_X);
+			
+			// Only rotate if thumbstick is pushed beyond deadzone
+			if (Math.abs(rightThumbstickX) > 0.1) {
+				const rotateSpeed = 2.0;
+				const rotationDelta = -rightThumbstickX * rotateSpeed * delta; // Invert for natural rotation
+				
+				// Rotate the player around the Y axis
+				player.rotateY(rotationDelta);
+			}
+		}
+		
 		if (gamepad.getButtonClick(XR_BUTTONS.TRIGGER)) {
 			try {
 				gamepad.getHapticActuator(0).pulse(0.6, 100);
