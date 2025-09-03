@@ -28,10 +28,30 @@ function createDebugPanel() {
     panel.innerHTML = `
         <h3 style="margin: 0 0 10px 0; color: #00ff00;">🔫 Cowboy Weapon Test</h3>
         <p style="margin: 0 0 10px 0; color: #aaa;">Mouse: Rotate | Scroll: Zoom</p>
+        <div id="coordinates" style="margin: 10px 0; color: #00ff00;"></div>
         <div id="debug-log"></div>
     `;
     document.body.appendChild(panel);
+    
+    // Create coordinates display
+    const coordinates = document.getElementById('coordinates');
+    coordinates.textContent = 'Rotation: X: 0.00, Y: 0.00, Z: 0.00';
+    
     return document.getElementById('debug-log');
+}
+
+function updateCoordinateDisplay() {
+    // Function kept for compatibility but no longer updates in real-time
+    if (weapon) {
+        const coordinates = document.getElementById('coordinates');
+        if (coordinates) {
+            // Convert radians to degrees for display
+            const x = (weapon.rotation.x * 180 / Math.PI).toFixed(2);
+            const y = (weapon.rotation.y * 180 / Math.PI).toFixed(2);
+            const z = (weapon.rotation.z * 180 / Math.PI).toFixed(2);
+            coordinates.textContent = `Rotation: X: ${x}°, Y: ${y}°, Z: ${z}°`;
+        }
+    }
 }
 
 function log(message, color = '#fff') {
@@ -123,15 +143,15 @@ function init() {
 
 function loadModels() {
     const loader = new GLTFLoader();
-    log('🔄 Loading blaster model...', '#ffaa00');
+    log('🔄 Loading revolver model...', '#ffaa00');
 
-    // Load blaster first
-    loader.load('assets/blaster.glb', 
+    // Load revolver first
+    loader.load('assets/revolver.glb', 
         (gltf) => {
             blaster = gltf.scene;
-            log('✓ Blaster loaded successfully', '#00ff00');
+            log('✓ Revolver loaded successfully', '#00ff00');
             
-            // Debug blaster structure
+            // Debug revolver structure
             let meshCount = 0;
             blaster.traverse((child) => {
                 if (child.isMesh) {
@@ -139,17 +159,17 @@ function loadModels() {
                     log(`  - Mesh: ${child.name || 'unnamed'}`);
                 }
             });
-            log(`  Total meshes in blaster: ${meshCount}`);
+            log(`  Total meshes in revolver: ${meshCount}`);
             
-            // Load cowboy after blaster is loaded
+            // Load cowboy after revolver is loaded
             loadCowboy();
         },
         (progress) => {
-            log(`Blaster loading: ${Math.round(progress.loaded / progress.total * 100)}%`);
+            log(`Revolver loading: ${Math.round(progress.loaded / progress.total * 100)}%`);
         },
         (error) => {
-            log('✗ Error loading blaster: ' + error.message, '#ff0000');
-            console.error('Blaster loading error:', error);
+            log('✗ Error loading revolver: ' + error.message, '#ff0000');
+            console.error('Revolver loading error:', error);
         }
     );
 }
@@ -173,30 +193,36 @@ function loadCowboy() {
 
             log('✓ Cowboy added to scene');
 
-            // Setup animations - use walking animation
+            // Setup animations - use TPose (no animation)
             if (gltf.animations && gltf.animations.length > 0) {
                 cowboyMixer = new THREE.AnimationMixer(cowboy);
                 
                 log(`Available animations: ${gltf.animations.map(anim => anim.name).join(', ')}`);
                 
-                // Find the walking animation
-                let walkingAnimation = gltf.animations[0]; // fallback to first
+                // Look for TPose animation
+                let tposeAnimation = null;
                 
                 for (const animation of gltf.animations) {
                     const animName = animation.name.toLowerCase();
                     log(`  - ${animation.name}`);
                     
-                    // Prefer the walking animation
-                    if (animName.includes('walking') || animName.includes('walk')) {
-                        walkingAnimation = animation;
+                    // Look for TPose animation
+                    if (animName.includes('tpose') || animName.includes('t-pose')) {
+                        tposeAnimation = animation;
                         break;
                     }
                 }
                 
-                const walkAction = cowboyMixer.clipAction(walkingAnimation);
-                walkAction.setLoop(THREE.LoopRepeat, Infinity);
-                walkAction.play();
-                log(`✓ Playing animation: ${walkingAnimation.name}`, '#00ff00');
+                // If TPose is found, use it as a static pose
+                if (tposeAnimation) {
+                    const tposeAction = cowboyMixer.clipAction(tposeAnimation);
+                    tposeAction.setLoop(THREE.LoopOnce, 1);
+                    tposeAction.clampWhenFinished = true;
+                    tposeAction.play();
+                    log(`✓ Playing TPose animation: ${tposeAnimation.name}`, '#00ff00');
+                } else {
+                    log('⚠ No TPose animation found, using default pose', '#ffaa00');
+                }
             }
 
             // Attach weapon after a short delay
@@ -223,11 +249,16 @@ function attachWeaponToCowboy() {
 
     log('🔧 Attaching weapon to cowboy...', '#ffaa00');
     
-    // Use the actual blaster model
+    // Use the actual revolver model
     weapon = blaster.clone(); // Store in global variable
     
-    // Scale the blaster to an appropriate size
-    weapon.scale.setScalar(1.0);
+    // Scale the revolver to 20% of its original size
+    weapon.scale.setScalar(0.2);
+    
+    // Set the revolver rotation to exactly -30, 80, 30 degrees
+    weapon.rotation.x = -30 * Math.PI / 180; // Convert degrees to radians
+    weapon.rotation.y = 80 * Math.PI / 180;
+    weapon.rotation.z = 30 * Math.PI / 180;
     
     // Log all bones
     const allBones = [];
@@ -252,7 +283,7 @@ function attachWeaponToCowboy() {
     
     // Add weapon to scene (not to bone)
     scene.add(weapon);
-    log('🔧 Added blaster model to scene (not to bone)', '#ffff00');
+    log('🔧 Added revolver model to scene (not to bone)', '#ffff00');
     
     // Log final position
     const worldPos = new THREE.Vector3();
@@ -265,6 +296,9 @@ function attachWeaponToCowboy() {
     
     // Position weapon at target position
     weapon.position.copy(worldPos);
+    
+    // Initialize coordinate display
+    updateCoordinateDisplay();
 }
 
 function animate() {
@@ -281,22 +315,15 @@ function animate() {
         const worldPos = new THREE.Vector3();
         rightHandBone.getWorldPosition(worldPos);
         
-        // Apply offset to position the weapon properly in the hand
+        // Apply offset to position the revolver properly in the hand
         weapon.position.copy(worldPos);
         weapon.position.x += 0.05; // Move slightly to the right
-        weapon.position.y -= 0.05; // Move lower in the hand
-        weapon.position.z += 0.1;  // Move slightly forward
-        
-        // Also update rotation to match bone with adjustments for natural holding
-        const worldQuaternion = new THREE.Quaternion();
-        rightHandBone.getWorldQuaternion(worldQuaternion);
-        weapon.quaternion.copy(worldQuaternion);
-        
-        // Apply additional rotation to make it look like it's being held naturally
-        weapon.rotateX(Math.PI / 4);  // Tilt the weapon slightly
-        weapon.rotateY(Math.PI / 2);  // Rotate to align with hand
-        weapon.rotateZ(-Math.PI / 4); // Rotate to hold naturally
+        weapon.position.y += 0.02; // Move slightly up
+        weapon.position.z += 0.02; // Move slightly forward
     }
+    
+    // Update coordinate display
+    updateCoordinateDisplay();
     
     renderer.render(scene, camera);
 }
