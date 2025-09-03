@@ -231,21 +231,17 @@ function attachWeaponToCowboy(cowboy) {
 		
 		console.log('All bones found:', allBones);
 		
-		cowboyWeapon.scale.setScalar(1.5); // Much larger weapon for visibility
+		// Scale the weapon to 20% of its original size (like in test-cowboy.js)
+		cowboyWeapon.scale.setScalar(0.2);
 		
-		if (rightHandBone) {
-			// Attach to the right hand bone
-			console.log('Attaching weapon to right hand bone:', rightHandBone.name);
-			
-			// Better positioning and rotation for the weapon
-			cowboyWeapon.position.set(0, -0.1, 0.1); // Forward and down slightly
-			cowboyWeapon.rotation.set(0, Math.PI/2, 0); // Point weapon forward
-			
-			rightHandBone.add(cowboyWeapon);
-			console.log('Successfully attached weapon to right hand bone');
-		} else {
-			// Enhanced fallback: try to find ANY hand bone
-			let anyHandBone = null;
+		// Set the weapon rotation to exactly -30, 80, 30 degrees (like in test-cowboy.js)
+		cowboyWeapon.rotation.x = -30 * Math.PI / 180; // Convert degrees to radians
+		cowboyWeapon.rotation.y = 80 * Math.PI / 180;
+		cowboyWeapon.rotation.z = 30 * Math.PI / 180;
+		
+		// Enhanced fallback: try to find ANY hand bone
+		let anyHandBone = null;
+		if (!rightHandBone) {
 			cowboy.traverse((child) => {
 				if (child.isBone) {
 					const boneName = child.name.toLowerCase();
@@ -255,21 +251,46 @@ function attachWeaponToCowboy(cowboy) {
 					}
 				}
 			});
+		}
+		
+		if (rightHandBone) {
+			// Attach to the right hand bone
+			console.log('Attaching weapon to right hand bone:', rightHandBone.name);
 			
-			if (anyHandBone) {
-				console.log('Using any hand bone as fallback:', anyHandBone.name);
-				cowboyWeapon.position.set(0, -0.1, 0.1);
-				cowboyWeapon.rotation.set(0, Math.PI/2, 0);
-				anyHandBone.add(cowboyWeapon);
-				console.log('Successfully attached weapon to fallback hand bone');
-			} else {
-				// Last resort: attach to cowboy with better estimated hand position
-				console.log('No hand bones found, using position-based fallback');
-				cowboyWeapon.position.set(0.6, 1.0, 0.3); // Right side, at chest height
-				cowboyWeapon.rotation.set(0, Math.PI/2, 0);
-				cowboy.add(cowboyWeapon);
-				console.log('Successfully attached weapon using position fallback');
-			}
+			// Position weapon at the right hand bone with proper offset (like in test-cowboy.js)
+			const worldPos = new THREE.Vector3();
+			rightHandBone.getWorldPosition(worldPos);
+			cowboyWeapon.position.copy(worldPos);
+			
+			// Apply offset to position the weapon properly in the hand
+			cowboyWeapon.position.x += 0.05; // Move slightly to the right
+			cowboyWeapon.position.y += 0.02; // Move slightly up
+			cowboyWeapon.position.z += 0.02; // Move slightly forward
+			
+			// Add weapon to scene (not to bone) to allow for proper positioning
+			cowboy.parent.add(cowboyWeapon);
+			console.log('Successfully attached weapon to right hand bone');
+		} else if (anyHandBone) {
+			console.log('Using any hand bone as fallback:', anyHandBone.name);
+			// Position weapon at the hand bone with proper offset
+			const worldPos = new THREE.Vector3();
+			anyHandBone.getWorldPosition(worldPos);
+			cowboyWeapon.position.copy(worldPos);
+			
+			// Apply offset to position the weapon properly in the hand
+			cowboyWeapon.position.x += 0.05;
+			cowboyWeapon.position.y += 0.02;
+			cowboyWeapon.position.z += 0.02;
+			
+			// Add weapon to scene (not to bone) to allow for proper positioning
+			cowboy.parent.add(cowboyWeapon);
+			console.log('Successfully attached weapon to fallback hand bone');
+		} else {
+			// Last resort: attach to cowboy with better estimated hand position
+			console.log('No hand bones found, using position-based fallback');
+			cowboyWeapon.position.set(0.8, 1.2, 0.4); // Fallback position like in test-cowboy.js
+			cowboy.parent.add(cowboyWeapon);
+			console.log('Successfully attached weapon using position fallback');
 		}
 		
 		// Make weapon more visible
@@ -283,6 +304,13 @@ function attachWeaponToCowboy(cowboy) {
 				child.castShadow = true;
 				child.receiveShadow = true;
 			}
+		});
+		
+		// Store weapon reference for updating position each frame
+		if (!cowboy.userData.weapons) cowboy.userData.weapons = [];
+		cowboy.userData.weapons.push({
+			weapon: cowboyWeapon,
+			bone: rightHandBone || anyHandBone
 		});
 		
 		// Log the weapon's world position to verify it's visible
@@ -973,6 +1001,25 @@ function onFrame(
 	cowboyMixers.forEach(cowboyData => {
 		if (cowboyData.mixer) {
 			cowboyData.mixer.update(delta);
+		}
+	});
+	
+	// Update cowboy weapon positions to match hand bones
+	cowboys.forEach(cowboy => {
+		if (cowboy.userData.weapons) {
+			cowboy.userData.weapons.forEach(weaponData => {
+				const { weapon, bone } = weaponData;
+				if (weapon && bone) {
+					const worldPos = new THREE.Vector3();
+					bone.getWorldPosition(worldPos);
+					
+					// Apply offset to position the weapon properly in the hand
+					weapon.position.copy(worldPos);
+					weapon.position.x += 0.05; // Move slightly to the right
+					weapon.position.y += 0.02; // Move slightly up
+					weapon.position.z += 0.02; // Move slightly forward
+				}
+			});
 		}
 	});
 	
