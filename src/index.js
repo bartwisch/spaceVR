@@ -11,7 +11,6 @@ import * as THREE from 'three';
 // Multiple imports next, sorted by imported identifier (ESLint sort-imports)
 import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Text } from 'troika-three-text';
 import { gsap } from 'gsap';
 import { init } from './init.js';
 
@@ -23,8 +22,13 @@ const bulletTimeToLive = 3; // Increased TTL to 3 seconds
 const blasterGroup = new THREE.Group();
 const blueBlasterGroup = new THREE.Group(); // New blue weapon group
 
+// Flamethrower particles
+let flamethrowerParticles = [];
+let maxFlamethrowerParticles = 100;
+let flamethrowerParticlePool = [];
+
 // Weapon switching
-let currentWeapon = 0; // 0 = red weapon, 1 = blue weapon
+let currentWeapon = 0; // 0 = red weapon, 1 = blue weapon (flamethrower)
 const weapons = [blasterGroup, blueBlasterGroup];
 
 const RUN_SPEED = 2.5;
@@ -55,23 +59,9 @@ const raycaster = new THREE.Raycaster();
 const keyStates = {};
 const obstacles = [];
 
-let score = 0;
-const scoreText = new Text();
-scoreText.fontSize = 0.3; // Smaller font size for top position
-scoreText.font = 'assets/SpaceMono-Bold.ttf';
-scoreText.position.z = -2;
-scoreText.color = 0xffa276;
-scoreText.anchorX = 'center';
-scoreText.anchorY = 'middle';
-
 let laserSound, scoreSound;
 
-function updateScoreDisplay() {
-	const clampedScore = Math.max(0, Math.min(9999, score));
-	const displayScore = clampedScore.toString().padStart(4, '0');
-	scoreText.text = displayScore;
-	scoreText.sync();
-}
+
 
 function spawnCowboy(scene) {
 	if (!cowboyGltf || blasterGroup.children.length === 0) {
@@ -241,47 +231,57 @@ function shootAtPlayer(cowboy, scene, camera) {
 }
 
 function fireBullet(scene, position, quaternion) {
-	// Play laser sound
-	if (laserSound.isPlaying) laserSound.stop();
-	laserSound.play();
-
-	const currentBlasterGroup = weapons[currentWeapon];
-	const bulletPrototype = currentBlasterGroup.getObjectByName('bullet');
-	
-	if (bulletPrototype) {
-		const bullet = bulletPrototype.clone();
-		scene.add(bullet);
-		bullet.position.copy(position);
-		bullet.quaternion.copy(quaternion);
-
-		const directionVector = forwardVector
-			.clone()
-			.applyQuaternion(bullet.quaternion);
-		bullet.userData = {
-			velocity: directionVector.multiplyScalar(bulletSpeed),
-			timeToLive: bulletTimeToLive,
-		};
-		bullets[bullet.uuid] = bullet;
-	} else {
-		// Create bullet dynamically if no prototype exists
-		const bulletGeometry = new THREE.SphereGeometry(0.05, 8, 8);
-		const bulletMaterial = currentWeapon === 0 ? 
-			new THREE.MeshBasicMaterial({ color: 0xff0000 }) : // Red for weapon 0
-			new THREE.MeshBasicMaterial({ color: 0x0000ff });  // Blue for weapon 1
-		const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+	// Check if we're using the flamethrower (weapon 1)
+	if (currentWeapon === 1) {
+		// Flamethrower mode - play continuous sound
+		if (window.flamethrowerSound && !window.flamethrowerSound.isPlaying) {
+			window.flamethrowerSound.play();
+		}
 		
-		scene.add(bullet);
-		bullet.position.copy(position);
-		bullet.quaternion.copy(quaternion);
+		// Create flamethrower particles
+		const directionVector = forwardVector.clone().applyQuaternion(quaternion);
+		emitFlamethrowerParticles(position, directionVector, scene);
+	} else {
+		// Regular bullet mode - play laser sound
+		if (laserSound.isPlaying) laserSound.stop();
+		laserSound.play();
 
-		const directionVector = forwardVector
-			.clone()
-			.applyQuaternion(bullet.quaternion);
-		bullet.userData = {
-			velocity: directionVector.multiplyScalar(bulletSpeed),
-			timeToLive: bulletTimeToLive,
-		};
-		bullets[bullet.uuid] = bullet;
+		const currentBlasterGroup = weapons[currentWeapon];
+		const bulletPrototype = currentBlasterGroup.getObjectByName('bullet');
+		
+		if (bulletPrototype) {
+			const bullet = bulletPrototype.clone();
+			scene.add(bullet);
+			bullet.position.copy(position);
+			bullet.quaternion.copy(quaternion);
+
+			const directionVector = forwardVector
+				.clone()
+				.applyQuaternion(bullet.quaternion);
+			bullet.userData = {
+				velocity: directionVector.multiplyScalar(bulletSpeed),
+				timeToLive: bulletTimeToLive,
+			};
+			bullets[bullet.uuid] = bullet;
+		} else {
+			// Create bullet dynamically if no prototype exists
+			const bulletGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+			const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red for weapon 0
+			const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+			
+			scene.add(bullet);
+			bullet.position.copy(position);
+			bullet.quaternion.copy(quaternion);
+
+			const directionVector = forwardVector
+				.clone()
+				.applyQuaternion(bullet.quaternion);
+			bullet.userData = {
+				velocity: directionVector.multiplyScalar(bulletSpeed),
+				timeToLive: bulletTimeToLive,
+			};
+			bullets[bullet.uuid] = bullet;
+		}
 	}
 }
 
@@ -428,21 +428,35 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		mouseBlaster.scale.setScalar(0.8);
 	});
 
-	// Load blue weapon variant
+	// Load blue weapon variant (flamethrower)
 	gltfLoader.load('assets/blaster.glb', (gltf) => {
 		const blueBlaster = gltf.scene.clone();
 		
-		// Modify material to make it blue
+		// Modify material to make it look like a flamethrower
 		blueBlaster.traverse((child) => {
 			if (child.isMesh) {
 				child.material = child.material.clone();
 				child.material.color = new THREE.Color(0x4444ff); // Blue color
 				child.material.emissive = new THREE.Color(0x000066); // Blue glow
+				child.material.metalness = 0.3;
+				child.material.roughness = 0.7;
 			}
 		});
 		
+		// Add a flame nozzle effect
+		const nozzleGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+		const nozzleMaterial = new THREE.MeshBasicMaterial({ 
+			color: 0xff4400,
+			transparent: true,
+			opacity: 0.7
+		});
+		const nozzle = new THREE.Mesh(nozzleGeometry, nozzleMaterial);
+		nozzle.rotation.x = Math.PI;
+		nozzle.position.z = -0.1;
+		blueBlaster.add(nozzle);
+		
 		blueBlasterGroup.add(blueBlaster);
-		console.log('=== BLUE BLASTER LOADED ===');
+		console.log('=== BLUE FLAMETHROWER LOADED ===');
 	});
 
 	// Load cowboy enemy
@@ -451,11 +465,6 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		// Spawn a single test cowboy after a short delay
 		setTimeout(() => spawnCowboy(scene), 2000);
 	});
-
-	scene.add(scoreText);
-	scoreText.position.set(0, 1.5, -2); // Position at the top of the screen
-	scoreText.rotateX(-Math.PI / 6); // Adjust rotation for better visibility
-	updateScoreDisplay();
 
 	// Load and set up positional audio
 	const listener = new THREE.AudioListener();
@@ -466,13 +475,24 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	audioLoader.load('assets/laser.ogg', (buffer) => {
 		laserSound.setBuffer(buffer);
 		blasterGroup.add(laserSound);
+		
+		// Also set up flamethrower sound using the same buffer but with different playback rate
+		if (window.flamethrowerSound) {
+			window.flamethrowerSound.setBuffer(buffer);
+			// Set a lower playback rate for a deeper, wave-like sound
+			window.flamethrowerSound.setPlaybackRate(0.7);
+		}
 	});
 
 	scoreSound = new THREE.PositionalAudio(listener);
 	audioLoader.load('assets/score.ogg', (buffer) => {
 		scoreSound.setBuffer(buffer);
-		scoreText.add(scoreSound);
+		// Score text removed, so no need to add sound to it
 	});
+	
+	// Create a simple wave sound for flamethrower by modifying the laser sound
+	window.flamethrowerSound = new THREE.PositionalAudio(listener);
+	// We'll set the buffer when the laser sound loads
 
 	// Mouse drag rotation variables
 	let isDragging = false;
@@ -835,7 +855,8 @@ function onFrame(
 			if (gamepad.getButtonDown(XR_BUTTONS.BUTTON_1)) {
 				// Switch weapon
 				currentWeapon = (currentWeapon + 1) % weapons.length;
-				console.log('Switched to weapon:', currentWeapon);
+				const weaponNames = ['Blaster', 'Flamethrower'];
+				console.log('Switched to weapon:', weaponNames[currentWeapon]);
 				
 				// Update the weapon model shown in the player's hand
 				if (raySpace.children.includes(blasterGroup)) {
@@ -856,11 +877,15 @@ function onFrame(
 				if (!gamepad.userData.lastFireTime) gamepad.userData.lastFireTime = 0;
 				
 				const currentTime = Date.now();
-				const fireRate = 150; // milliseconds between shots (about 6.67 shots per second)
+				// Different fire rates for different weapons
+				const fireRate = currentWeapon === 1 ? 50 : 150; // Faster for flamethrower
 				
 				if (currentTime - gamepad.userData.lastFireTime > fireRate) {
 					try {
-						gamepad.getHapticActuator(0).pulse(0.3, 50); // Lighter haptic feedback for automatic fire
+						// Different haptic feedback for different weapons
+						const intensity = currentWeapon === 1 ? 0.2 : 0.3;
+						const duration = currentWeapon === 1 ? 30 : 50;
+						gamepad.getHapticActuator(0).pulse(intensity, duration);
 					} catch {
 						// do nothing
 					}
@@ -872,6 +897,11 @@ function onFrame(
 					
 					fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
 					gamepad.userData.lastFireTime = currentTime;
+				}
+			} else {
+				// Trigger released - stop flamethrower sound if it's playing
+				if (currentWeapon === 1 && window.flamethrowerSound && window.flamethrowerSound.isPlaying) {
+					window.flamethrowerSound.stop();
 				}
 			}
 		}
@@ -980,10 +1010,7 @@ function onFrame(
 						}
 					}
 
-					score += 50;
-					updateScoreDisplay();
-					if (scoreSound.isPlaying) scoreSound.stop();
-					scoreSound.play();
+					// Score display removed - no need to update score
 					console.log('Cowboy hit processing complete');
 				}
 			});
@@ -1018,7 +1045,174 @@ function onFrame(
 		}
 	}
 	
+	// Update flamethrower particles
+	updateFlamethrowerParticles(delta, scene);
+	
 	gsap.ticker.tick(delta);
+}
+
+function createFlamethrowerParticle() {
+	// Reuse particles from pool if available
+	if (flamethrowerParticlePool.length > 0) {
+		return flamethrowerParticlePool.pop();
+	}
+	
+	// Create new particle - even smaller size for better effect
+	const geometry = new THREE.SphereGeometry(0.01, 3, 3);
+	const material = new THREE.MeshBasicMaterial({
+		color: new THREE.Color(
+			Math.random() * 0.5 + 0.5, // Red component (0.5 - 1.0)
+			Math.random() * 0.3,       // Green component (0.0 - 0.3)
+			0                          // Blue component (0.0)
+		),
+		transparent: true,
+		opacity: 0.9
+	});
+	const particle = new THREE.Mesh(geometry, material);
+	
+	particle.userData = {
+		velocity: new THREE.Vector3(),
+		lifetime: 0,
+		maxLifetime: 0,
+		isFlame: true // Mark as flame particle for collision detection
+	};
+	
+	return particle;
+}
+
+function updateFlamethrowerParticles(delta, scene) {
+	for (let i = flamethrowerParticles.length - 1; i >= 0; i--) {
+		const particle = flamethrowerParticles[i];
+		
+		// Update particle
+		particle.position.add(particle.userData.velocity.clone().multiplyScalar(delta));
+		
+		// Update lifetime
+		particle.userData.lifetime += delta;
+		
+		// Fade out as particle ages
+		const lifeRatio = particle.userData.lifetime / particle.userData.maxLifetime;
+		particle.material.opacity = 0.8 * (1 - lifeRatio);
+		
+		// Randomly flicker color
+		if (Math.random() < 0.1) {
+			particle.material.color = new THREE.Color(
+				Math.random() * 0.5 + 0.5, // Red
+				Math.random() * 0.3,       // Green
+				0                          // Blue
+			);
+		}
+		
+		// Check collision with cowboys
+		for (let j = cowboys.length - 1; j >= 0; j--) {
+			const cowboy = cowboys[j];
+			if (cowboy.userData.hasPlayedDeath) continue;
+			
+			const distance = cowboy.position.distanceTo(particle.position);
+			// Smaller hitbox for flamethrower (particles are small)
+			if (distance < 1.0) {
+				// Kill the cowboy
+				const cowboyData = cowboyMixers[j];
+				if (cowboyData && cowboyData.mixer && cowboy.userData && cowboy.userData.deathAction && !cowboy.userData.hasPlayedDeath) {
+					console.log('Cowboy hit by flamethrower! Distance:', distance);
+					cowboy.userData.hasPlayedDeath = true;
+					
+					// Stop current idle animation
+					if (cowboy.userData.idleAction) {
+						cowboy.userData.idleAction.stop();
+					}
+					
+					// Play death animation
+					const deathAction = cowboy.userData.deathAction;
+					deathAction.setLoop(THREE.LoopOnce, 1);
+					deathAction.clampWhenFinished = true;
+					deathAction.play();
+					
+					// Clear the shooting interval
+					if (cowboy.userData.shootInterval) {
+						clearInterval(cowboy.userData.shootInterval);
+					}
+					
+					// Increase score
+					// Score display removed - no need to update score
+					
+					// Remove the particle that hit the cowboy
+					scene.remove(particle);
+					flamethrowerParticlePool.push(particle);
+					flamethrowerParticles.splice(i, 1);
+					
+					// After death animation completes, remove cowboy
+					setTimeout(() => {
+						// Find the current index of the cowboy, as it may have changed
+						const currentIndex = cowboys.indexOf(cowboy);
+						if (currentIndex === -1) {
+							// Cowboy already removed, do nothing
+							return;
+						}
+
+						// Clear the shooting interval
+						if (cowboy.userData.shootInterval) {
+							clearInterval(cowboy.userData.shootInterval);
+						}
+						
+						scene.remove(cowboy);
+						cowboys.splice(currentIndex, 1);
+						console.log('Cowboys array length after removal:', cowboys.length);
+						
+						// Remove corresponding mixer data at the same index
+						cowboyMixers.splice(currentIndex, 1);
+						
+					}, 4000); // Wait 4 seconds total for death animation
+					
+					break; // Break since this particle is now gone
+				}
+			}
+		}
+		
+		// Remove dead particles
+		if (particle.userData.lifetime >= particle.userData.maxLifetime) {
+			scene.remove(particle);
+			flamethrowerParticlePool.push(particle);
+			flamethrowerParticles.splice(i, 1);
+		}
+	}
+}
+
+function emitFlamethrowerParticles(position, direction, scene) {
+	// Emit multiple particles per call for flame effect
+	const particleCount = 8; // More particles for denser flame
+	
+	for (let i = 0; i < particleCount; i++) {
+		if (flamethrowerParticles.length >= maxFlamethrowerParticles) {
+			// Don't create more particles if we've hit the limit
+			break;
+		}
+		
+		const particle = createFlamethrowerParticle();
+		
+		// Position particle at weapon nozzle with slight randomness
+		particle.position.copy(position);
+		particle.position.x += (Math.random() - 0.5) * 0.05;
+		particle.position.y += (Math.random() - 0.5) * 0.05;
+		particle.position.z += (Math.random() - 0.5) * 0.05;
+		
+		// Set velocity with spread
+		const spread = 0.2; // Tighter spread for more focused flame
+		particle.userData.velocity.copy(direction);
+		particle.userData.velocity.x += (Math.random() - 0.5) * spread;
+		particle.userData.velocity.y += (Math.random() - 0.5) * spread;
+		particle.userData.velocity.z += (Math.random() - 0.5) * spread;
+		
+		// Scale velocity for flamethrower effect - faster particles
+		particle.userData.velocity.multiplyScalar(8 + Math.random() * 7);
+		
+		// Set lifetime - shorter for more dynamic effect
+		particle.userData.maxLifetime = 0.3 + Math.random() * 0.3;
+		particle.userData.lifetime = 0;
+		
+		scene.add(particle);
+		flamethrowerParticles.push(particle);
+	}
 }
 
 init(setupScene, onFrame);
