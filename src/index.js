@@ -9,9 +9,9 @@
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 // Multiple imports next, sorted by imported identifier (ESLint sort-imports)
+import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Text } from 'troika-three-text';
-import { XR_BUTTONS } from 'gamepad-wrapper';
 import { gsap } from 'gsap';
 import { init } from './init.js';
 
@@ -868,6 +868,38 @@ function onFrame(
 			raySpace.add(blasterGroup);
 			mesh.visible = false;
 		}
+		
+		// Handle thumbstick movement
+		if (controllers.left && controllers.left.gamepad) {
+			const leftGamepad = controllers.left.gamepad;
+			const thumbstickX = leftGamepad.getAxis(XR_AXES.THUMBSTICK_X);
+			const thumbstickY = leftGamepad.getAxis(XR_AXES.THUMBSTICK_Y);
+			
+			// Only move if thumbstick is pushed beyond deadzone
+			if (Math.abs(thumbstickX) > 0.1 || Math.abs(thumbstickY) > 0.1) {
+				const moveSpeed = 5.0;
+				const moveX = thumbstickX * moveSpeed * delta;
+				const moveZ = -thumbstickY * moveSpeed * delta; // Invert Y axis for natural forward/backward movement
+				
+				// Get player's current rotation to move in the correct direction
+				const playerDirection = new THREE.Vector3();
+				camera.getWorldDirection(playerDirection);
+				playerDirection.y = 0;
+				playerDirection.normalize();
+				
+				// Calculate strafe direction (perpendicular to forward)
+				const strafeDirection = new THREE.Vector3();
+				strafeDirection.crossVectors(playerDirection, camera.up);
+				
+				// Apply movement
+				player.position.x += moveX * strafeDirection.x + moveZ * playerDirection.x;
+				player.position.z += moveX * strafeDirection.z + moveZ * playerDirection.z;
+				
+				// Update player position tracking
+				window.playerPosition = -player.position.z;
+			}
+		}
+		
 		if (gamepad.getButtonClick(XR_BUTTONS.TRIGGER)) {
 			try {
 				gamepad.getHapticActuator(0).pulse(0.6, 100);

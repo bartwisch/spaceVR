@@ -17,12 +17,20 @@ import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 
 export async function init(setupScene = () => {}, onFrame = () => {}) {
-	// iwer setup
+	// iwer setup - only use for desktop development when native WebXR is not available
 	let nativeWebXRSupport = false;
 	if (navigator.xr) {
 		nativeWebXRSupport = await navigator.xr.isSessionSupported('immersive-vr');
+		console.log('Native WebXR support:', nativeWebXRSupport);
 	}
-	if (!nativeWebXRSupport) {
+	
+	// Detect if we're on a mobile device (like Quest browser)
+	const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+	console.log('Is mobile device:', isMobile);
+	
+	// Only use iwer for desktop development when WebXR is not available
+	if (!nativeWebXRSupport && !isMobile) {
+		console.log('Using iwer for desktop development');
 		const xrDevice = new XRDevice(metaQuest3);
 		xrDevice.installRuntime();
 		xrDevice.fovy = (75 / 180) * Math.PI;
@@ -43,6 +51,8 @@ export async function init(setupScene = () => {}, onFrame = () => {}) {
 			0.9887216687202454,
 		);
 		new DevUI(xrDevice);
+	} else if (nativeWebXRSupport) {
+		console.log('Using native WebXR support');
 	}
 
 	const container = document.createElement('div');
@@ -144,5 +154,15 @@ export async function init(setupScene = () => {}, onFrame = () => {}) {
 
 	renderer.setAnimationLoop(animate);
 
-	document.body.appendChild(VRButton.createButton(renderer));
+	// Add VR button with debugging
+	console.log('Creating VR button, renderer.xr.enabled:', renderer.xr.enabled);
+	const vrButton = VRButton.createButton(renderer);
+	console.log('VR Button created:', vrButton);
+	
+	// Add click handler for debugging
+	vrButton.addEventListener('click', () => {
+		console.log('VR Button clicked');
+	});
+	
+	document.body.appendChild(vrButton);
 }
