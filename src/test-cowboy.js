@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 let scene, camera, renderer, controls;
 let cowboy, blaster;
 let cowboyMixer;
+let weapon, rightHandBone; // Add these variables to track the weapon and bone
 
 // Create debug info panel
 function createDebugPanel() {
@@ -172,38 +173,30 @@ function loadCowboy() {
 
             log('✓ Cowboy added to scene');
 
-            // Setup animations - find the best idle animation
+            // Setup animations - use walking animation
             if (gltf.animations && gltf.animations.length > 0) {
                 cowboyMixer = new THREE.AnimationMixer(cowboy);
                 
                 log(`Available animations: ${gltf.animations.map(anim => anim.name).join(', ')}`);
                 
-                // Find best animation (avoid death animations)
-                let bestAnimation = gltf.animations[0]; // fallback to first
+                // Find the walking animation
+                let walkingAnimation = gltf.animations[0]; // fallback to first
                 
                 for (const animation of gltf.animations) {
                     const animName = animation.name.toLowerCase();
                     log(`  - ${animation.name}`);
                     
-                    // Prefer idle/wave animations, avoid death animations
-                    if (animName.includes('wave') || animName.includes('wink') || animName.includes('greeting')) {
-                        bestAnimation = animation;
+                    // Prefer the walking animation
+                    if (animName.includes('walking') || animName.includes('walk')) {
+                        walkingAnimation = animation;
                         break;
-                    } else if (animName.includes('idle') && !animName.includes('dead')) {
-                        bestAnimation = animation;
-                    } else if (!animName.includes('dead') && !animName.includes('death')) {
-                        // Any non-death animation is better than death
-                        if (bestAnimation.name.toLowerCase().includes('dead') || 
-                            bestAnimation.name.toLowerCase().includes('death')) {
-                            bestAnimation = animation;
-                        }
                     }
                 }
                 
-                const idleAction = cowboyMixer.clipAction(bestAnimation);
-                idleAction.setLoop(THREE.LoopRepeat, Infinity);
-                idleAction.play();
-                log(`✓ Playing animation: ${bestAnimation.name}`, '#00ff00');
+                const walkAction = cowboyMixer.clipAction(walkingAnimation);
+                walkAction.setLoop(THREE.LoopRepeat, Infinity);
+                walkAction.play();
+                log(`✓ Playing animation: ${walkingAnimation.name}`, '#00ff00');
             }
 
             // Attach weapon after a short delay
@@ -230,10 +223,13 @@ function attachWeaponToCowboy() {
 
     log('🔧 Attaching weapon to cowboy...', '#ffaa00');
     
-    const cowboyWeapon = blaster.clone();
+    // Use the actual blaster model
+    weapon = blaster.clone(); // Store in global variable
+    
+    // Scale the blaster to an appropriate size
+    weapon.scale.setScalar(1.0);
     
     // Log all bones
-    let rightHandBone = null;
     const allBones = [];
     
     cowboy.traverse((child) => {
@@ -241,8 +237,12 @@ function attachWeaponToCowboy() {
             allBones.push(child.name);
             const boneName = child.name.toLowerCase();
             
-            if (boneName.includes('hand') && (boneName.includes('right') || boneName.includes('r'))) {
-                rightHandBone = child;
+            // Try multiple naming conventions for right hand bones
+            if ((boneName.includes('hand') && (boneName.includes('right') || boneName.includes('r'))) ||
+                boneName.includes('r_hand') || 
+                boneName.includes('hand_r') ||
+                boneName === 'rhand') {
+                rightHandBone = child; // Store in global variable
                 log(`✓ Found right hand bone: ${child.name}`, '#00ff00');
             }
         }
@@ -250,60 +250,21 @@ function attachWeaponToCowboy() {
     
     log(`Skeleton bones (${allBones.length}): ${allBones.join(', ')}`);
     
-    // Make weapon VERY visible for testing
-    cowboyWeapon.scale.setScalar(3.0); // Huge weapon
-    log('✓ Weapon scaled to 3.0x size');
-    
-    if (rightHandBone) {
-        log(`✓ Attaching to right hand bone: ${rightHandBone.name}`, '#00ff00');
-        
-        // Position weapon in hand
-        cowboyWeapon.position.set(0, -0.2, 0.2);
-        cowboyWeapon.rotation.set(0, Math.PI/2, 0);
-        
-        rightHandBone.add(cowboyWeapon);
-        
-    } else {
-        log('⚠ No right hand bone found, using fallback', '#ffaa00');
-        
-        // Fallback: attach to cowboy directly at hand position
-        cowboyWeapon.position.set(0.8, 1.2, 0.4);
-        cowboyWeapon.rotation.set(0, Math.PI/2, 0);
-        cowboy.add(cowboyWeapon);
-    }
-    
-    // Make weapon super visible with bright materials
-    let meshCount = 0;
-    cowboyWeapon.traverse((child) => {
-        if (child.isMesh) {
-            meshCount++;
-            // Create super bright red material
-            child.material = new THREE.MeshStandardMaterial({
-                color: 0xff0000,
-                emissive: 0x660000,
-                metalness: 0.8,
-                roughness: 0.2
-            });
-            child.castShadow = true;
-            child.receiveShadow = true;
-            log(`  - Weapon mesh ${meshCount}: ${child.name || 'unnamed'} - bright red material applied`);
-        }
-    });
+    // Add weapon to scene (not to bone)
+    scene.add(weapon);
+    log('🔧 Added blaster model to scene (not to bone)', '#ffff00');
     
     // Log final position
     const worldPos = new THREE.Vector3();
-    cowboyWeapon.getWorldPosition(worldPos);
-    log(`✓ Weapon world position: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)})`, '#00ff00');
+    if (rightHandBone) {
+        rightHandBone.getWorldPosition(worldPos);
+    } else {
+        worldPos.set(0.8, 1.2, 0.4); // Fallback position
+    }
+    log(`✓ Weapon target position: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)})`, '#00ff00');
     
-    // Add a helper sphere at weapon position for debugging
-    const helperGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-    const helperMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const helper = new THREE.Mesh(helperGeometry, helperMaterial);
-    helper.position.copy(worldPos);
-    scene.add(helper);
-    log('✓ Green helper sphere added at weapon position');
-    
-    log('🎉 Weapon attachment complete!', '#00ff00');
+    // Position weapon at target position
+    weapon.position.copy(worldPos);
 }
 
 function animate() {
@@ -313,6 +274,28 @@ function animate() {
     
     if (cowboyMixer) {
         cowboyMixer.update(0.016);
+    }
+    
+    // Update weapon position to match right hand bone
+    if (weapon && rightHandBone) {
+        const worldPos = new THREE.Vector3();
+        rightHandBone.getWorldPosition(worldPos);
+        
+        // Apply offset to position the weapon properly in the hand
+        weapon.position.copy(worldPos);
+        weapon.position.x += 0.05; // Move slightly to the right
+        weapon.position.y -= 0.05; // Move lower in the hand
+        weapon.position.z += 0.1;  // Move slightly forward
+        
+        // Also update rotation to match bone with adjustments for natural holding
+        const worldQuaternion = new THREE.Quaternion();
+        rightHandBone.getWorldQuaternion(worldQuaternion);
+        weapon.quaternion.copy(worldQuaternion);
+        
+        // Apply additional rotation to make it look like it's being held naturally
+        weapon.rotateX(Math.PI / 4);  // Tilt the weapon slightly
+        weapon.rotateY(Math.PI / 2);  // Rotate to align with hand
+        weapon.rotateZ(-Math.PI / 4); // Rotate to hold naturally
     }
     
     renderer.render(scene, camera);
