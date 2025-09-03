@@ -41,6 +41,7 @@ let road = null;
 let backgroundPlane = null;
 window.playerPosition = 0; // Make it globally accessible
 const playerSpeed = 1.5; // Player walking speed
+let globalCamera = null; // Global reference to camera for cowboy targeting
 
 // Mouse controls
 let mouseBlaster = null;
@@ -113,7 +114,9 @@ function spawnCowboy(scene) {
 	// Store shooting interval for this cowboy
 	const shootInterval = setInterval(() => {
 		// Shoot at the player every 3 seconds
-		shootAtPlayer(cowboy, scene);
+		if (globalCamera) {
+			shootAtPlayer(cowboy, scene, globalCamera);
+		}
 	}, 3000);
 	
 	// Store the interval ID so we can clear it later
@@ -222,7 +225,7 @@ function attachWeaponToCowboy(cowboy) {
 	}
 }
 
-function shootAtPlayer(cowboy, scene) {
+function shootAtPlayer(cowboy, scene, camera) {
 	// Check if cowboy is still alive
 	if (cowboy.userData.hasPlayedDeath) {
 		return;
@@ -232,11 +235,9 @@ function shootAtPlayer(cowboy, scene) {
 	const cowboyPosition = new THREE.Vector3();
 	cowboy.getWorldPosition(cowboyPosition);
 	
-	// Get player's position (we'll use the camera position)
+	// Get player's actual camera position
 	const playerPos = new THREE.Vector3();
-	// We'll need to pass the camera somehow, let's assume it's available globally
-	// For now, let's use a fixed position for testing
-	playerPos.set(0, 1.6, -window.playerPosition);
+	camera.getWorldPosition(playerPos);
 	
 	// Calculate direction from cowboy to player
 	const direction = new THREE.Vector3().subVectors(playerPos, cowboyPosition).normalize();
@@ -369,6 +370,9 @@ function populateScenery(scene) {
 }
 
 function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
+	// Store global camera reference for cowboy targeting
+	globalCamera = camera;
+	
 	// Create road
 	createRoad(scene);
 	populateScenery(scene);
