@@ -22,6 +22,19 @@ const bulletTimeToLive = 3; // Increased TTL to 3 seconds
 const blasterGroup = new THREE.Group();
 const blueBlasterGroup = new THREE.Group(); // New blue weapon group
 
+// Cowboy enemies
+const spaceCowboys = [];
+const spaceCowboyMixers = [];
+let spaceCowboyGltf = null;
+
+// Wave-based space cowboy spawning system
+let spaceCowboysInCurrentWave = 0;
+let maxSpaceCowboysPerWave = 5;
+let waveStartTime = 0;
+const timeBetweenWaves = 10; // in seconds
+let currentWave = 1;
+let spawnRate = 2; // in seconds
+
 // Flamethrower particles
 let flamethrowerParticles = [];
 let maxFlamethrowerParticles = 100;
@@ -41,6 +54,17 @@ let nebulaClouds = [];
 let currentWeapon = 0; // 0 = red weapon, 1 = blue weapon (flamethrower)
 const weapons = [blasterGroup, blueBlasterGroup];
 
+// Stationary machine gun system
+let machineGun = null;
+let machineGunMount = null;
+let isBothHandsOnGun = false;
+let machineGunFiring = false;
+let machineGunFireRate = 0.1; // 10 rounds per second
+let lastMachineGunShot = 0;
+let leftHandOnGun = false;
+let rightHandOnGun = false;
+const HAND_DISTANCE_THRESHOLD = 0.5; // Max distance for hand to be "on" the gun
+
 const RUN_SPEED = 2.5;
 const WALK_SPEED = 0.8;
 const ATTACK_THRESHOLD = 5; // Distance to stop and attack (or idle)
@@ -50,10 +74,7 @@ const AVOIDANCE_RADIUS = 3.0; // For space cowboy-space cowboy avoidance
 const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For space cowboy-obstacle avoidance
 const AVOIDANCE_STRENGTH = 3.0; // Increased strength
 
-// Space Cowboy enemies
-const spaceCowboys = [];
-const spaceCowboyMixers = [];
-let spaceCowboyGltf = null;
+
 
 // Spaceship auto-pilot movement
 let road = null;
@@ -65,13 +86,7 @@ let autopilotSpeed = 5; // Speed of spaceship auto-pilot
 let spaceshipPath = 0; // Current position along the spaceship's path
 
 // Wave-based space cowboy spawning system
-let currentWave = 1;
-let spaceCowboysInCurrentWave = 0;
-let maxSpaceCowboysPerWave = 5; // Start with 5 spaceCowboys per wave
-let spaceCowboysKilled = 0;
-let waveStartTime = 0;
-let timeBetweenWaves = 3; // 3 seconds between waves
-let spawnRate = 2; // Spawn 1 spaceCowboy every 2 seconds during wave
+// Remove all wave spawning - pure space environment
 
 // Power-up system
 let activePowerUps = {};
@@ -94,135 +109,7 @@ let laserSound, scoreSound, cowboyCallouts, alienHisses;
 
 
 
-function spawnSpaceCowboy(scene) {
-	if (!spaceCowboyGltf || blasterGroup.children.length === 0) {
-		// Also check if blaster is loaded
-		console.log('No spaceCowboy or blaster GLTF loaded yet');
-		console.log('BlasterGroup children count:', blasterGroup.children.length);
-		if (blasterGroup.children.length > 0) {
-			console.log('First blaster child:', blasterGroup.children[0]);
-		}
-		return;
-	}
 
-	console.log('Spawning spaceCowboy...');
-	console.log('BlasterGroup children count:', blasterGroup.children.length);
-	if (blasterGroup.children.length > 0) {
-		console.log('First blaster child:', blasterGroup.children[0]);
-	}
-	
-	// Properly clone the GLTF scene with animations using SkeletonUtils
-	const spaceCowboy = SkeletonUtils.clone(spaceCowboyGltf.scene);
-	
-	// Set position around the spaceship (360° approach)
-	const angle = Math.random() * Math.PI * 2; // Random angle in radians
-	const distance = 15 + Math.random() * 10; // 15-25 units from center
-	
-	// Use window.playerPosition for positioning
-	spaceCowboy.position.set(
-		Math.cos(angle) * distance,    // X: circular position
-		Math.random() * 3,             // Y: slight height variation
-		-window.playerPosition + Math.sin(angle) * distance  // Z: circular position around player
-	);
-	
-	// Make the spaceCowboy face the spaceship
-	spaceCowboy.lookAt(0, 1.6, -window.playerPosition); // Face the spaceship center
-	
-	spaceCowboy.scale.setScalar(1.2);
-	scene.add(spaceCowboy);
-	spaceCowboys.push(spaceCowboy);
-	
-	console.log('Space Cowboy added to scene at position:', spaceCowboy.position);
-	console.log('Total Space Cowboys:', spaceCowboys.length);
-
-	// Play space cowboy callout when spawning (30% chance)
-	if (Math.random() < 0.3) {
-		setTimeout(() => playSpaceCowboyCallout(), Math.random() * 2000); // Random delay 0-2 seconds
-	}
-
-	// Store shooting interval for this space cowboy
-	const shootInterval = setInterval(() => {
-		// Shoot at the player every 3 seconds
-		if (globalCamera) {
-			shootAtPlayer(spaceCowboy, scene, globalCamera);
-		}
-	}, 3000);
-	
-	// Store the interval ID so we can clear it later
-	spaceCowboy.userData.shootInterval = shootInterval;
-
-	console.log('Zombie added to scene at position:', spaceCowboy.position);
-	console.log('Total spaceCowboys:', spaceCowboys.length);
-
-	// Setup animation mixer for this spaceCowboy
-	if (spaceCowboyGltf.animations && spaceCowboyGltf.animations.length > 0) {
-		const mixer = new THREE.AnimationMixer(spaceCowboy);
-		const spaceCowboyData = {
-			mixer: mixer,
-			animations: spaceCowboyGltf.animations,
-			currentAction: null,
-			idleAction: null,
-			deathAction: null,
-			walkAction: null,
-			runAction: null
-		};
-		spaceCowboyMixers.push(spaceCowboyData);
-		
-		console.log('Setting up animations, found:', spaceCowboyGltf.animations.length, 'animations');
-		
-		// Find spaceCowboy-specific animations
-		let idleAction = null;
-		let deathAction = null;
-		let walkAction = null;
-		let runAction = null;
-		
-		for (let animation of spaceCowboyGltf.animations) {
-			const animName = animation.name.toLowerCase();
-			if (animName.includes('idle') || animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
-				idleAction = mixer.clipAction(animation);
-			} else if (animName.includes('dead') || animName.includes('death')) {
-				deathAction = mixer.clipAction(animation);
-			} else if (animName.includes('walk') || animName.includes('shamble')) {
-				walkAction = mixer.clipAction(animation);
-			} else if (animName.includes('run') || animName.includes('sprint')) {
-				runAction = mixer.clipAction(animation);
-			}
-		}
-		
-		// If no specific animations found, use first animation as idle
-		if (!idleAction && spaceCowboyGltf.animations.length > 0) {
-			idleAction = mixer.clipAction(spaceCowboyGltf.animations[0]);
-			console.log('Using first animation as idle:', spaceCowboyGltf.animations[0].name);
-		}
-		
-		// Store all animation references
-		spaceCowboyData.idleAction = idleAction;
-		spaceCowboyData.deathAction = deathAction;
-		spaceCowboyData.walkAction = walkAction;
-		spaceCowboyData.runAction = runAction;
-		
-		// Start with idle animation
-		if (idleAction) {
-			idleAction.setLoop(THREE.LoopRepeat, Infinity);
-			idleAction.play();
-			spaceCowboyData.currentAction = idleAction;
-			console.log('Idle animation started');
-		}
-		
-		// Store animation references in userData
-		spaceCowboy.userData = {
-			...spaceCowboy.userData,
-			idleAction: idleAction,
-			deathAction: deathAction,
-			walkAction: walkAction,
-			runAction: runAction,
-			hasPlayedDeath: false
-		};
-		
-	} else {
-		console.log('No animations found for spaceCowboy');
-	}
-}
 
 function createPowerUp(scene, position, type) {
 	// Create a simple glowing cube as power-up
@@ -471,6 +358,180 @@ function playAlienSound() {
 		// audio.volume = 0.3;
 		// audio.play();
 	}
+}
+
+function createStationaryMachineGun(scene) {
+	// Create machine gun mount/base
+	const mountGeometry = new THREE.CylinderGeometry(0.3, 0.4, 0.2, 8);
+	const mountMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+	machineGunMount = new THREE.Mesh(mountGeometry, mountMaterial);
+	machineGunMount.position.set(0, -0.5, -2); // Position in front of player
+	scene.add(machineGunMount);
+	
+	// Create machine gun body
+	const gunBodyGeometry = new THREE.BoxGeometry(0.15, 0.15, 1.2);
+	const gunMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+	machineGun = new THREE.Mesh(gunBodyGeometry, gunMaterial);
+	
+	// Create gun barrel
+	const barrelGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 8);
+	const barrelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+	const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+	barrel.rotation.z = Math.PI / 2; // Point forward
+	barrel.position.z = 0.4;
+	machineGun.add(barrel);
+	
+	// Create left grip handle
+	const leftGripGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 8);
+	const leftGrip = new THREE.Mesh(leftGripGeometry, gunMaterial);
+	leftGrip.position.set(-0.2, -0.05, -0.3);
+	leftGrip.rotation.x = Math.PI / 4;
+	machineGun.add(leftGrip);
+	
+	// Create right grip handle  
+	const rightGrip = new THREE.Mesh(leftGripGeometry, gunMaterial);
+	rightGrip.position.set(0.2, -0.05, -0.3);
+	rightGrip.rotation.x = Math.PI / 4;
+	machineGun.add(rightGrip);
+	
+	// Create trigger area (invisible collision box)
+	const triggerGeometry = new THREE.BoxGeometry(0.5, 0.2, 0.6);
+	const triggerMaterial = new THREE.MeshBasicMaterial({ 
+		color: 0x00ff00, 
+		transparent: true, 
+		opacity: 0.0 // Invisible
+	});
+	const triggerZone = new THREE.Mesh(triggerGeometry, triggerMaterial);
+	triggerZone.position.set(0, -0.1, -0.2);
+	machineGun.add(triggerZone);
+	
+	// Store reference for hand detection
+	machineGun.userData = {
+		leftGripPosition: leftGrip.position.clone(),
+		rightGripPosition: rightGrip.position.clone(),
+		triggerZone: triggerZone,
+		barrelTip: new THREE.Vector3(0, 0, 0.7) // Barrel tip for bullet spawn
+	};
+	
+	// Mount gun to base
+	machineGun.position.set(0, 0.2, 0);
+	machineGunMount.add(machineGun);
+	
+	console.log('Stationary machine gun created');
+}
+
+function checkHandsOnMachineGun(controllers) {
+	if (!machineGun || !controllers[0] || !controllers[1]) {
+		leftHandOnGun = false;
+		rightHandOnGun = false;
+		isBothHandsOnGun = false;
+		return;
+	}
+	
+	// Get world positions of grips
+	const leftGripWorldPos = new THREE.Vector3();
+	const rightGripWorldPos = new THREE.Vector3();
+	
+	// Calculate world positions of grip handles
+	const leftGripLocal = machineGun.userData.leftGripPosition.clone();
+	const rightGripLocal = machineGun.userData.rightGripPosition.clone();
+	
+	machineGun.localToWorld(leftGripLocal);
+	machineGun.localToWorld(rightGripLocal);
+	
+	// Check left hand distance to left grip
+	if (controllers[0] && controllers[0].raySpace) {
+		const leftHandPos = new THREE.Vector3();
+		controllers[0].raySpace.getWorldPosition(leftHandPos);
+		const leftDistance = leftHandPos.distanceTo(leftGripLocal);
+		leftHandOnGun = leftDistance < HAND_DISTANCE_THRESHOLD;
+	}
+	
+	// Check right hand distance to right grip  
+	if (controllers[1] && controllers[1].raySpace) {
+		const rightHandPos = new THREE.Vector3();
+		controllers[1].raySpace.getWorldPosition(rightHandPos);
+		const rightDistance = rightHandPos.distanceTo(rightGripLocal);
+		rightHandOnGun = rightDistance < HAND_DISTANCE_THRESHOLD;
+	}
+	
+	// Both hands must be on gun to operate
+	isBothHandsOnGun = leftHandOnGun && rightHandOnGun;
+	
+	// Visual feedback - change gun color when hands are on it
+	if (isBothHandsOnGun) {
+		machineGun.material.color.setHex(0x00ff00); // Green when ready
+	} else if (leftHandOnGun || rightHandOnGun) {
+		machineGun.material.color.setHex(0xffaa00); // Orange when one hand is on
+	} else {
+		machineGun.material.color.setHex(0x666666); // Gray when no hands
+	}
+}
+
+function fireMachineGun(scene, time, controllers) {
+	if (!isBothHandsOnGun || !machineGun) return;
+	
+	// Check fire rate
+	if (time - lastMachineGunShot < machineGunFireRate) return;
+	
+	// Create bullet
+	const bulletGeometry = new THREE.SphereGeometry(0.02);
+	const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow bullets
+	const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+	
+	// Position bullet at gun barrel tip
+	const barrelTipWorld = machineGun.userData.barrelTip.clone();
+	machineGun.localToWorld(barrelTipWorld);
+	bullet.position.copy(barrelTipWorld);
+	
+	// Get gun's forward direction
+	const gunDirection = new THREE.Vector3(0, 0, 1);
+	machineGun.localToWorld(gunDirection);
+	gunDirection.sub(machineGun.position).normalize();
+	
+	// Add some spread for machine gun effect
+	gunDirection.x += (Math.random() - 0.5) * 0.1;
+	gunDirection.y += (Math.random() - 0.5) * 0.1;
+	
+	// Set bullet velocity
+	bullet.userData = {
+		velocity: gunDirection.clone().multiplyScalar(25), // Fast bullets
+		timeToLive: 3,
+		startTime: time
+	};
+	
+	scene.add(bullet);
+	if (!bullets) window.bullets = {};
+	bullets[bullet.uuid] = bullet;
+	
+	// Update last shot time
+	lastMachineGunShot = time;
+	
+	// Visual muzzle flash effect
+	const flashGeometry = new THREE.SphereGeometry(0.1);
+	const flashMaterial = new THREE.MeshBasicMaterial({ 
+		color: 0xffff00,
+		transparent: true,
+		opacity: 0.8
+	});
+	const muzzleFlash = new THREE.Mesh(flashGeometry, flashMaterial);
+	muzzleFlash.position.copy(barrelTipWorld);
+	scene.add(muzzleFlash);
+	
+	// Remove muzzle flash after short duration
+	setTimeout(() => {
+		scene.remove(muzzleFlash);
+	}, 50);
+	
+	// Haptic feedback for both controllers
+	if (controllers && controllers[0] && controllers[0].gamepad) {
+		controllers[0].gamepad.getHapticActuator(0).pulse(0.3, 100);
+	}
+	if (controllers && controllers[1] && controllers[1].gamepad) {
+		controllers[1].gamepad.getHapticActuator(0).pulse(0.3, 100);
+	}
+	
+	console.log('Machine gun fired!');
 }
 
 function updateSpaceEnvironment(delta) {
@@ -745,6 +806,7 @@ function populateScenery(scene) {
 }
 
 function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
+	scene.background = new THREE.Color(0x000000);
 	// Store global camera reference for space cowboy targeting
 	globalCamera = camera;
 	
@@ -755,28 +817,20 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	createSpaceCowboyCallouts();
 	createAlienSounds();
 	
-	// Create road (keep for collision system)
-	createRoad(scene);
-	populateScenery(scene);
+	// Create stationary machine gun
+	createStationaryMachineGun(scene);
+	
+	// Remove road and scenery - pure space environment
 	
 	// Space environment lighting
-	const ambientLight = new THREE.AmbientLight(0x202040, 1.5); // Darker space ambient
+	const ambientLight = new THREE.AmbientLight(0x101020, 1.5); // Darker space ambient
 	scene.add(ambientLight);
 	
 	const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 	directionalLight.position.set(5, 10, 7);
 	scene.add(directionalLight);
 
-	// Create a large background plane
-	const backgroundGeometry = new THREE.PlaneGeometry(500, 200);
-	const backgroundMaterial = new THREE.MeshStandardMaterial({ color: 0x000020 }); // Dark blue
-	backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
 	
-	// Position it far in the distance to act as a backdrop
-	backgroundPlane.position.z = -150;
-    backgroundPlane.position.y = 100; // Center it vertically a bit
-	
-	scene.add(backgroundPlane);
 	
 	// Create a circle around the player
 	const ringGeometry = new THREE.RingGeometry(1.9, 2, 32);
@@ -856,19 +910,14 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		console.error('Failed to load spaceship GLTF:', error);
 	});
 
-	// Load spaceCowboy enemy (use cowboy model as placeholder)
-	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
-		spaceCowboyGltf = gltf;
-		// Spawn a single test spaceCowboy after a short delay
-		setTimeout(() => spawnSpaceCowboy(scene), 2000);
 		
-		// Spawn test power-ups after a longer delay
-		setTimeout(() => {
-			createPowerUp(scene, new THREE.Vector3(3, 1, -5), POWERUP_TYPES.RAPID_FIRE);
-			createPowerUp(scene, new THREE.Vector3(-3, 1, -8), POWERUP_TYPES.EXPLOSIVE_ROUNDS);
-			createPowerUp(scene, new THREE.Vector3(0, 1, -12), POWERUP_TYPES.SHIELD);
-		}, 5000);
-	});
+	
+	// Spawn test power-ups for machine gun testing
+	setTimeout(() => {
+		createPowerUp(scene, new THREE.Vector3(3, 1, -5), POWERUP_TYPES.RAPID_FIRE);
+		createPowerUp(scene, new THREE.Vector3(-3, 1, -8), POWERUP_TYPES.EXPLOSIVE_ROUNDS);
+		createPowerUp(scene, new THREE.Vector3(0, 1, -12), POWERUP_TYPES.SHIELD);
+	}, 5000);
 
 	// Load and set up positional audio
 	const listener = new THREE.AudioListener();
@@ -911,6 +960,13 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		previousMouseX = event.clientX;
 		previousMouseY = event.clientY;
 		
+		// Track mouse button states for machine gun
+		if (event.button === 0) { // Left mouse button
+			keyStates['mouseLeft'] = true;
+		} else if (event.button === 2) { // Right mouse button
+			keyStates['mouseRight'] = true;
+		}
+		
 		// Disable OrbitControls when starting drag
 		if (controls) {
 			controls.enabled = false;
@@ -946,8 +1002,15 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 	});
 
-	window.addEventListener('mouseup', () => {
+	window.addEventListener('mouseup', (event) => {
 		isDragging = false;
+		
+		// Clear mouse button states for machine gun
+		if (event.button === 0) { // Left mouse button
+			keyStates['mouseLeft'] = false;
+		} else if (event.button === 2) { // Right mouse button
+			keyStates['mouseRight'] = false;
+		}
 	});
 
 	window.addEventListener('click', (_event) => {
@@ -1005,6 +1068,11 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	window.addEventListener('keyup', (event) => {
 		keyStates[event.code] = false;
 	});
+	
+	// Disable context menu on right-click for machine gun controls
+	window.addEventListener('contextmenu', (event) => {
+		event.preventDefault();
+	});
 }
 
 function onFrame(
@@ -1052,9 +1120,7 @@ function onFrame(
 	if (road) {
 		road.position.z = -window.playerPosition;
 	}
-	if (backgroundPlane) {
-		backgroundPlane.position.z = -window.playerPosition - 150;
-	}
+	
 	
 	// Update spaceCowboys: movement, orientation, and animations
 	for (let i = 0; i < spaceCowboys.length; i++) {
@@ -1484,17 +1550,30 @@ function onFrame(
 	// Update space environment
 	updateSpaceEnvironment(delta);
 	
-	// Spawn jetpack particles for moving space cowboys
-	spaceCowboys.forEach(spaceCowboy => {
-		if (!spaceCowboy.userData.hasPlayedDeath && Math.random() < 0.3) {
-			// Create jetpack particles
-			for (let i = 0; i < 2; i++) {
-				const particle = createJetpackParticle(spaceCowboy);
-				scene.add(particle);
-				jetpackParticles.push(particle);
-			}
-		}
-	});
+	// Update machine gun system
+	checkHandsOnMachineGun(controllers);
+	
+	// Check for machine gun firing (both triggers pressed)
+	let triggerPressed = false;
+	if (controllers[0] && controllers[0].gamepad && controllers[1] && controllers[1].gamepad) {
+		const leftTrigger = controllers[0].gamepad.getAxis(XR_AXES.TRIGGER);
+		const rightTrigger = controllers[1].gamepad.getAxis(XR_AXES.TRIGGER);
+		triggerPressed = leftTrigger > 0.5 && rightTrigger > 0.5;
+	}
+	
+	// Fire machine gun if both hands are on gun and both triggers are pressed
+	if (isBothHandsOnGun && triggerPressed) {
+		fireMachineGun(scene, _time, controllers);
+	}
+	
+	// Desktop mouse controls for machine gun (both mouse buttons)
+	if (isMouseMode && keyStates['mouseLeft'] && keyStates['mouseRight']) {
+		// Simulate both hands on gun for mouse mode
+		isBothHandsOnGun = true;
+		fireMachineGun(scene, _time, controllers);
+	}
+	
+	// Remove space cowboy particle effects - pure space environment
 	
 	// Update power-ups
 	// Animate power-up pickups
