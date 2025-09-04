@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a WebXR project built with Three.js that creates an immersive spaceVR game. The project is a game where players can use VR controllers or mouse controls to shoot cowboy enemies that spawn on both sides of a road in a 3D space station environment.
+This is a WebXR project built with Three.js that creates an immersive spaceVR game. Players can use VR controllers or mouse controls to shoot cowboy enemies that spawn on both sides of a road in a 3D space environment. The game features dual weapon systems (blaster and flamethrower), AI enemy movement with collision avoidance, positional 3D audio, haptic feedback, and particle effects.
 
 ## Development Commands
 
@@ -30,19 +30,21 @@ This is a WebXR project built with Three.js that creates an immersive spaceVR ga
 - Configures gamepad input handling via gamepad-wrapper
 
 **Game Logic (`index.js`)**
-- Dual input system: VR controllers (trigger button) and mouse controls (click)
-- Bullet physics system with velocity-based movement and time-to-live cleanup
-- GLTF model loading for blaster weapon and animated cowboy character
-- Hit detection using 3D distance calculations
-- Score tracking with custom font rendering via troika-three-text
-- Positional 3D audio for laser shots and scoring
-- GSAP animations for target scaling and respawn effects
+- Dual weapon system: red blaster (projectile-based) and blue flamethrower (particle-based) with weapon switching
+- Dual input system: VR controllers (trigger for continuous fire, A button for weapon switching) and mouse controls
+- Advanced enemy AI: cowboys with run/walk/idle animations, collision avoidance between enemies and obstacles, distance-based behavior states
+- Bullet and particle physics systems with velocity-based movement, time-to-live cleanup, and collision detection
+- GLTF model loading with SkeletonUtils for proper animation cloning
+- Positional 3D audio system with different sounds for laser/flamethrower
+- VR movement: thumbstick locomotion (left controller) and snap rotation (right thumbstick)
+- Mouse mode: drag-to-look camera controls with raycast-based shooting
 
 **Development Workflow**
 - Webpack dev server configured for HTTPS (WebXR requirement) on all network interfaces
-- ESLint integration with import sorting rules enforced
+- ESLint integration with import sorting rules enforced (enforces specific member syntax sort order)
 - Auto-copy of assets and favicon to dist during build
 - Source maps enabled for debugging
+- Multi-entry setup: main game (`index.js`) and test page (`test-cowboy.js`)
 
 ## WebXR Development Notes
 
@@ -61,6 +63,29 @@ This is a WebXR project built with Three.js that creates an immersive spaceVR ga
 
 ### VR-Specific Patterns
 - Controllers accessed via `renderer.xr.getController()` and `renderer.xr.getControllerGrip()`
-- Gamepad input handled through connected/disconnected event listeners
-- Haptic feedback triggered via `gamepad.getHapticActuator(0).pulse()`
+- Gamepad input handled through connected/disconnected event listeners with GamepadWrapper
+- Haptic feedback with different intensities per weapon: `gamepad.getHapticActuator(0).pulse(intensity, duration)`
 - Dual rendering mode support (VR headset + desktop fallback with mouse controls)
+- Fire rate limiting with timestamp tracking in gamepad userData
+- XR_BUTTONS and XR_AXES constants from gamepad-wrapper for input handling
+
+## Game Architecture Patterns
+
+### Enemy AI System
+- Cowboys spawn dynamically with configurable limits (max 20 concurrent)
+- State-based behavior: RUN_SPEED > WALK_THRESHOLD > ATTACK_THRESHOLD distances
+- Collision avoidance using vector mathematics for both enemy-enemy and enemy-obstacle interactions
+- Animation system uses THREE.SkeletonUtils.clone() for proper instancing with independent animations
+- Automatic cleanup of enemies that fall too far behind player
+
+### Weapon System Architecture
+- Weapon switching via `weapons` array with `currentWeapon` index
+- Different firing mechanics: bullets (objects in scene) vs particles (pooled system for flamethrower)
+- Particle pooling system with `flamethrowerParticlePool` for performance
+- Different collision detection systems per weapon type
+
+### Performance Considerations
+- Object pooling for flamethrower particles (reuse particles instead of creating/destroying)
+- Bullet cleanup with time-to-live system
+- Enemy removal based on distance from player
+- Animation mixers updated per frame with delta timing
