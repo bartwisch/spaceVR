@@ -6,12 +6,12 @@
  */
 
 // All (namespace) imports first
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+
 import * as THREE from 'three';
 // Multiple imports next, sorted by imported identifier (ESLint sort-imports)
-import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { gsap } from 'gsap';
+import { XR_BUTTONS } from 'gamepad-wrapper';
+
+
 import { init } from './init.js';
 
 const bullets = {};
@@ -60,7 +60,6 @@ const HAND_DISTANCE_THRESHOLD = 0.5; // Max distance for hand to be "on" the gun
 let backgroundPlane = null;
 let spaceship = null; // The player's spaceship
 window.playerPosition = 0; // Make it globally accessible - represents spaceship position
-let globalCamera = null; // Global reference to camera for spaceCowboy targeting
 let autopilotSpeed = 5; // Speed of spaceship auto-pilot
 let spaceshipPath = 0; // Current position along the spaceship's path
 
@@ -76,15 +75,10 @@ const POWERUP_TYPES = {
 	SHIELD: 'shield'
 };
 
-// Mouse controls
-let mouseBlaster = null;
-let isMouseMode = false;
-const mouse = new THREE.Vector2();
-const raycaster = new THREE.Raycaster();
-const keyStates = {};
 
 
-let laserSound, scoreSound, cowboyCallouts, alienHisses;
+
+let laserSound;
 
 
 
@@ -259,7 +253,7 @@ function createAsteroids(scene) {
 		
 		scene.add(asteroid);
 		asteroids.push(asteroid);
-		obstacles.push(asteroid); // Add to obstacles for collision detection
+		
 	}
 }
 
@@ -289,38 +283,17 @@ function createNebulaClouds(scene) {
 
 
 
-function createAlienSounds() {
-	// Create alien communication sounds
-	const alienSounds = [
-		"*bioelectric hiss*",
-		"*clicking sounds*", 
-		"*alien shriek*",
-		"*plasma charge noise*",
-		"*telepathic buzz*"
-	];
-	
-	alienHisses = alienSounds;
-}
 
-function playAlienSound() {
-	if (alienHisses && alienHisses.length > 0) {
-		const randomSound = alienHisses[Math.floor(Math.random() * alienHisses.length)];
-		console.log(`👽 Alien: ${randomSound}`);
-		
-		// TODO: Replace with actual audio playback when audio files are available
-		// const audio = new Audio(`audio/alien_${index}.ogg`);
-		// audio.volume = 0.3;
-		// audio.play();
-	}
-}
 
-function createStationaryMachineGun(scene) {
+
+
+function createStationaryMachineGun(player) {
 	// Create machine gun mount/base
 	const mountGeometry = new THREE.CylinderGeometry(0.3, 0.4, 0.2, 8);
 	const mountMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
 	machineGunMount = new THREE.Mesh(mountGeometry, mountMaterial);
-	machineGunMount.position.set(0, -0.5, -2); // Position in front of player
-	scene.add(machineGunMount);
+	machineGunMount.position.set(0, 1, -2); // Position in front of player
+	player.add(machineGunMount);
 	
 	// Create machine gun body
 	const gunBodyGeometry = new THREE.BoxGeometry(0.15, 0.15, 1.2);
@@ -370,6 +343,7 @@ function createStationaryMachineGun(scene) {
 	// Mount gun to base
 	machineGun.position.set(0, 0.2, 0);
 	machineGunMount.add(machineGun);
+	machineGunMount.scale.set(3, 3, 3);
 	
 	console.log('Stationary machine gun created');
 }
@@ -567,17 +541,16 @@ function fireBullet(scene, position, quaternion) {
 
 function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
 	scene.background = new THREE.Color(0x000000);
-	// Store global camera reference for space cowboy targeting
-	globalCamera = camera;
+	
 	
 	// Create space environment instead of road
 	createSpaceEnvironment(scene);
 	
 	
-	createAlienSounds();
+	
 	
 	// Create stationary machine gun
-	createStationaryMachineGun(scene);
+	createStationaryMachineGun(player);
 	
 	// Remove road and scenery - pure space environment
 	
@@ -601,73 +574,7 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 	// Add the circle as a child of the player so it moves with the player
 	player.add(ring);
 	
-	// Load models
-	const gltfLoader = new GLTFLoader();
-
-	gltfLoader.load('assets/blaster.glb', (gltf) => {
-		blasterGroup.add(gltf.scene);
-		console.log('=== RED BLASTER LOADED ===');
-		console.log('Blaster group children count:', blasterGroup.children.length);
-		if (blasterGroup.children.length > 0) {
-			const firstChild = blasterGroup.children[0];
-			console.log('First blaster child:', firstChild);
-			console.log('First blaster child name:', firstChild.name);
-			console.log('First blaster child type:', firstChild.type);
-			console.log('First blaster child visible:', firstChild.visible);
-			console.log('First blaster child children count:', firstChild.children.length);
-			if (firstChild.children.length > 0) {
-				console.log('First blaster grandchild:', firstChild.children[0]);
-				console.log('First blaster grandchild name:', firstChild.children[0].name);
-			}
-		}
-		
-		// Create mouse blaster for non-VR mode
-		mouseBlaster = gltf.scene.clone();
-		mouseBlaster.position.set(0.3, -0.3, -0.5);
-		mouseBlaster.scale.setScalar(0.8);
-	});
-
-	// Load blue weapon variant (flamethrower)
-	gltfLoader.load('assets/blaster.glb', (gltf) => {
-		const blueBlaster = gltf.scene.clone();
-		
-		// Modify material to make it look like a flamethrower
-		blueBlaster.traverse((child) => {
-			if (child.isMesh) {
-				child.material = child.material.clone();
-				child.material.color = new THREE.Color(0x4444ff); // Blue color
-				child.material.emissive = new THREE.Color(0x000066); // Blue glow
-				child.material.metalness = 0.3;
-				child.material.roughness = 0.7;
-			}
-		});
-		
-		// Add a flame nozzle effect
-		const nozzleGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
-		const nozzleMaterial = new THREE.MeshBasicMaterial({ 
-			color: 0xff4400,
-			transparent: true,
-			opacity: 0.7
-		});
-		const nozzle = new THREE.Mesh(nozzleGeometry, nozzleMaterial);
-		nozzle.rotation.x = Math.PI;
-		nozzle.position.z = -0.1;
-		blueBlaster.add(nozzle);
-		
-		blueBlasterGroup.add(blueBlaster);
-		console.log('=== BLUE FLAMETHROWER LOADED ===');
-	});
-
-	// Load spaceship model
-	gltfLoader.load('assets/spacestation.glb', (gltf) => {
-		spaceship = gltf.scene.clone();
-		spaceship.scale.setScalar(2); // Make it bigger
-		spaceship.position.set(0, 0, 0); // Center position
-		scene.add(spaceship);
-		console.log('Spaceship loaded and added to scene');
-	}, undefined, (error) => {
-		console.error('Failed to load spaceship GLTF:', error);
-	});
+	
 
 		
 	
@@ -696,137 +603,15 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		}
 	});
 
-	scoreSound = new THREE.PositionalAudio(listener);
-	audioLoader.load('assets/score.ogg', (buffer) => {
-		scoreSound.setBuffer(buffer);
-		// Score text removed, so no need to add sound to it
-	});
+	
 	
 	// Create a simple wave sound for flamethrower by modifying the laser sound
 	window.flamethrowerSound = new THREE.PositionalAudio(listener);
 	// We'll set the buffer when the laser sound loads
 
-	// Mouse drag rotation variables
-	let isDragging = false;
-	let previousMouseX = 0;
-	let previousMouseY = 0;
-	let cameraRotationY = 0;
-	let cameraRotationX = 0;
-
-	// Setup mouse controls
-	window.addEventListener('mousedown', (event) => {
-		isDragging = true;
-		previousMouseX = event.clientX;
-		previousMouseY = event.clientY;
-		
-		// Track mouse button states for machine gun
-		if (event.button === 0) { // Left mouse button
-			keyStates['mouseLeft'] = true;
-		} else if (event.button === 2) { // Right mouse button
-			keyStates['mouseRight'] = true;
-		}
-		
-		// Disable OrbitControls when starting drag
-		if (controls) {
-			controls.enabled = false;
-		}
-	});
-
-	window.addEventListener('mousemove', (event) => {
-		// Handle camera rotation with mouse drag
-		if (isDragging) {
-			const deltaX = event.clientX - previousMouseX;
-			const deltaY = event.clientY - previousMouseY;
-			
-			// Adjust camera rotation based on mouse movement
-			cameraRotationY -= deltaX * 0.01; // Horizontal rotation
-			cameraRotationX -= deltaY * 0.01; // Vertical rotation (standard - moving mouse up looks up)
-			
-			// Limit vertical rotation to prevent flipping
-			cameraRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotationX));
-			
-			// Apply rotation to camera using quaternions for stability
-			const quatX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), cameraRotationX);
-			const quatY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotationY);
-			
-			// Combine rotations
-			camera.quaternion.copy(quatY).multiply(quatX);
-			
-			previousMouseX = event.clientX;
-			previousMouseY = event.clientY;
-		}
-		
-		// Also update mouse coordinates for shooting
-		mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-	});
-
-	window.addEventListener('mouseup', (event) => {
-		isDragging = false;
-		
-		// Clear mouse button states for machine gun
-		if (event.button === 0) { // Left mouse button
-			keyStates['mouseLeft'] = false;
-		} else if (event.button === 2) { // Right mouse button
-			keyStates['mouseRight'] = false;
-		}
-	});
-
-	window.addEventListener('click', (_event) => {
-		if (!isMouseMode && mouseBlaster) {
-			// Switch to mouse mode and add blaster to camera
-			isMouseMode = true;
-			camera.add(mouseBlaster);
-		}
-		
-		if (isMouseMode && mouseBlaster) {
-			// Calculate direction from blaster to mouse cursor
-			raycaster.setFromCamera(mouse, camera);
-			const targetPoint = new THREE.Vector3();
-			raycaster.ray.at(10, targetPoint); // Project 10 units forward
-			
-			// Get blaster world position
-			const blasterWorldPosition = new THREE.Vector3();
-			mouseBlaster.getWorldPosition(blasterWorldPosition);
-			
-			// Calculate direction vector from blaster to target point (used for quaternion calculation)
-			targetPoint.clone().sub(blasterWorldPosition).normalize();
-			
-			// Create quaternion from direction
-			const quaternion = new THREE.Quaternion();
-			const matrix = new THREE.Matrix4();
-			matrix.lookAt(blasterWorldPosition, targetPoint, camera.up);
-			quaternion.setFromRotationMatrix(matrix);
-			
-			fireBullet(scene, blasterWorldPosition, quaternion);
-		}
-	});
 	
-	// Re-enable OrbitControls when exiting mouse mode
-	window.addEventListener('keydown', (event) => {
-		if (isMouseMode && event.key === 'Escape') {
-			isMouseMode = false;
-			if (mouseBlaster && mouseBlaster.parent === camera) {
-				camera.remove(mouseBlaster);
-			}
-			// Re-enable OrbitControls
-			if (controls) {
-				controls.enabled = true;
-			}
-			// Reset camera rotation
-			cameraRotationY = 0;
-			cameraRotationX = 0;
-			camera.quaternion.set(0, 0, 0, 1); // Reset to identity quaternion
-		}
-	});
 
-	// Add listeners for fly controls
-	window.addEventListener('keydown', (event) => {
-		keyStates[event.code] = true;
-	});
-	window.addEventListener('keyup', (event) => {
-		keyStates[event.code] = false;
-	});
+	
 	
 	// Disable context menu on right-click for machine gun controls
 	window.addEventListener('contextmenu', (event) => {
@@ -880,128 +665,7 @@ function onFrame(
 	
 	
 	
-	// Check if we're in VR mode or mouse mode
-	const isInVR = controllers.right && controllers.right.gamepad;
 	
-	if (isInVR) {
-		// VR Mode - hide mouse blaster if it's visible
-		if (isMouseMode && mouseBlaster && mouseBlaster.parent === camera) {
-			camera.remove(mouseBlaster);
-			isMouseMode = false;
-		}
-		
-		const { gamepad, raySpace, mesh } = controllers.right;
-		// Add the current weapon to the controller (start with red weapon)
-		if (!raySpace.children.includes(weapons[currentWeapon])) {
-			raySpace.add(weapons[currentWeapon]);
-			mesh.visible = false;
-		}
-		
-		// Handle thumbstick movement
-		if (controllers.left && controllers.left.gamepad) {
-			const leftGamepad = controllers.left.gamepad;
-			const thumbstickX = leftGamepad.getAxis(XR_AXES.THUMBSTICK_X);
-			const thumbstickY = leftGamepad.getAxis(XR_AXES.THUMBSTICK_Y);
-			
-			// Only move if thumbstick is pushed beyond deadzone
-			if (Math.abs(thumbstickX) > 0.1 || Math.abs(thumbstickY) > 0.1) {
-				const moveSpeed = 5.0;
-				const moveX = thumbstickX * moveSpeed * delta;
-				const moveZ = -thumbstickY * moveSpeed * delta; // Invert Y axis for natural forward/backward movement
-				
-				// Get player's current rotation to move in the correct direction
-				const playerDirection = new THREE.Vector3();
-				camera.getWorldDirection(playerDirection);
-				playerDirection.y = 0;
-				playerDirection.normalize();
-				
-				// Calculate strafe direction (perpendicular to forward)
-				const strafeDirection = new THREE.Vector3();
-				strafeDirection.crossVectors(playerDirection, camera.up);
-				
-				// Apply movement
-				player.position.x += moveX * strafeDirection.x + moveZ * playerDirection.x;
-				player.position.z += moveX * strafeDirection.z + moveZ * playerDirection.z;
-				
-				// Update player position tracking
-				window.playerPosition = -player.position.z;
-			}
-		}
-		
-		// Handle right thumbstick rotation
-		if (gamepad) {
-			const rightThumbstickX = gamepad.getAxis(XR_AXES.THUMBSTICK_X);
-			
-			// Only rotate if thumbstick is pushed beyond deadzone
-			if (Math.abs(rightThumbstickX) > 0.1) {
-				const rotateSpeed = 2.0;
-				const rotationDelta = -rightThumbstickX * rotateSpeed * delta; // Invert for natural rotation
-				
-				// Rotate the player around the Y axis
-				player.rotateY(rotationDelta);
-			}
-			
-			// Handle weapon switching with button press (using BUTTON_1, typically the A button)
-			if (gamepad.getButtonDown(XR_BUTTONS.BUTTON_1)) {
-				// Switch weapon
-				currentWeapon = (currentWeapon + 1) % weapons.length;
-				const weaponNames = ['Blaster', 'Flamethrower'];
-				console.log('Switched to weapon:', weaponNames[currentWeapon]);
-				
-				// Update the weapon model shown in the player's hand
-				if (raySpace.children.includes(blasterGroup)) {
-					raySpace.remove(blasterGroup);
-				}
-				if (raySpace.children.includes(blueBlasterGroup)) {
-					raySpace.remove(blueBlasterGroup);
-				}
-				
-				// Add the current weapon to the controller
-				raySpace.add(weapons[currentWeapon]);
-			}
-			
-			// Handle continuous fire (dauerfeuer) when trigger is held
-			if (gamepad.getButton(XR_BUTTONS.TRIGGER)) {
-				// Check if we should fire (implementing a fire rate limit)
-				if (!gamepad.userData) gamepad.userData = {};
-				if (!gamepad.userData.lastFireTime) gamepad.userData.lastFireTime = 0;
-				
-				const currentTime = Date.now();
-				// Different fire rates for different weapons
-				const fireRate = currentWeapon === 1 ? 50 : 150; // Faster for flamethrower
-				
-				if (currentTime - gamepad.userData.lastFireTime > fireRate) {
-					try {
-						// Different haptic feedback for different weapons
-						const intensity = currentWeapon === 1 ? 0.2 : 0.3;
-						const duration = currentWeapon === 1 ? 30 : 50;
-						gamepad.getHapticActuator(0).pulse(intensity, duration);
-					} catch {
-						// do nothing
-					}
-					
-					const blasterWorldPosition = new THREE.Vector3();
-					const blasterWorldQuaternion = new THREE.Quaternion();
-					weapons[currentWeapon].getWorldPosition(blasterWorldPosition);
-					weapons[currentWeapon].getWorldQuaternion(blasterWorldQuaternion);
-					
-					fireBullet(scene, blasterWorldPosition, blasterWorldQuaternion);
-					gamepad.userData.lastFireTime = currentTime;
-				}
-			} else {
-				// Trigger released - stop flamethrower sound if it's playing
-				if (currentWeapon === 1 && window.flamethrowerSound && window.flamethrowerSound.isPlaying) {
-					window.flamethrowerSound.stop();
-				}
-			}
-		}
-	} else {
-		// Non-VR Mode - show mouse blaster if not already visible
-		if (!isMouseMode && mouseBlaster && mouseBlaster.parent !== camera) {
-			camera.add(mouseBlaster);
-			isMouseMode = true;
-		}
-	}
 
 	Object.values(bullets).forEach((bullet) => {
 		if (bullet.userData.timeToLive < 0) {
@@ -1034,27 +698,11 @@ function onFrame(
 	// Update machine gun system
 	checkHandsOnMachineGun(controllers);
 	
-	// Check for machine gun firing (both triggers pressed)
-	let triggerPressed = false;
-	if (controllers[0] && controllers[0].gamepad && controllers[1] && controllers[1].gamepad) {
-		const leftTrigger = controllers[0].gamepad.getAxis(XR_AXES.TRIGGER);
-		const rightTrigger = controllers[1].gamepad.getAxis(XR_AXES.TRIGGER);
-		triggerPressed = leftTrigger > 0.5 && rightTrigger > 0.5;
-	}
 	
-	// Fire machine gun if both hands are on gun and both triggers are pressed
-	if (isBothHandsOnGun && triggerPressed) {
-		fireMachineGun(scene, _time, controllers);
-	}
 	
-	// Desktop mouse controls for machine gun (both mouse buttons)
-	if (isMouseMode && keyStates['mouseLeft'] && keyStates['mouseRight']) {
-		// Simulate both hands on gun for mouse mode
-		isBothHandsOnGun = true;
-		fireMachineGun(scene, _time, controllers);
-	}
 	
-	// Remove space cowboy particle effects - pure space environment
+	
+	
 	
 	// Update power-ups
 	// Animate power-up pickups
@@ -1090,7 +738,7 @@ function onFrame(
 		}
 	});
 	
-	gsap.ticker.tick(delta);
+	
 }
 
 function createFlamethrowerParticle() {
