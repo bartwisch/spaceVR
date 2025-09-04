@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 // Multiple imports next, sorted by imported identifier (ESLint sort-imports)
-import { XR_BUTTONS } from 'gamepad-wrapper';
+import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
 
 
 import { init } from './init.js';
@@ -292,7 +292,7 @@ function createStationaryMachineGun(player) {
 	const mountGeometry = new THREE.CylinderGeometry(0.3, 0.4, 0.2, 8);
 	const mountMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
 	machineGunMount = new THREE.Mesh(mountGeometry, mountMaterial);
-	machineGunMount.position.set(0, 1, -2); // Position in front of player
+	machineGunMount.position.set(0, 1, -1); // Position in front of player
 	player.add(machineGunMount);
 	
 	// Create machine gun body
@@ -343,7 +343,7 @@ function createStationaryMachineGun(player) {
 	// Mount gun to base
 	machineGun.position.set(0, 0.2, 0);
 	machineGunMount.add(machineGun);
-	machineGunMount.scale.set(3, 3, 3);
+	machineGunMount.scale.set(1, 1, 1);
 	
 	console.log('Stationary machine gun created');
 }
@@ -697,6 +697,32 @@ function onFrame(
 	
 	// Update machine gun system
 	checkHandsOnMachineGun(controllers);
+
+	// Check for machine gun firing (both triggers pressed)
+	let triggerPressed = false;
+	if (controllers[0] && controllers[0].gamepad && controllers[1] && controllers[1].gamepad) {
+		const leftTrigger = controllers[0].gamepad.getAxis(XR_AXES.TRIGGER);
+		const rightTrigger = controllers[1].gamepad.getAxis(XR_AXES.TRIGGER);
+		triggerPressed = leftTrigger > 0.5 && rightTrigger > 0.5;
+	}
+
+	// Handle gun rotation with both triggers
+	if (triggerPressed) {
+		// I need to get the rotation from the controllers
+		// I can use the thumbsticks for rotation
+		if(controllers.right && controllers.right.gamepad) {
+			const rightThumbstickX = controllers.right.gamepad.getAxis(XR_AXES.THUMBSTICK_X);
+			
+			// Only rotate if thumbstick is pushed beyond deadzone
+			if (Math.abs(rightThumbstickX) > 0.1) {
+				const rotateSpeed = 2.0;
+				const rotationDelta = -rightThumbstickX * rotateSpeed * delta; // Invert for natural rotation
+				
+				// Rotate the gun around the Y axis
+			machineGunMount.rotateY(rotationDelta);
+			}
+		}
+	}
 	
 	
 	
@@ -737,6 +763,40 @@ function onFrame(
 			console.log(`${key} power-up expired`);
 		}
 	});
+
+	const controllerStateDiv = document.getElementById('controller-state');
+	if (controllerStateDiv) {
+		let stateString = 'Controllers:\n';
+		if (controllers.left && controllers.left.gamepad) {
+			stateString += 'Left:\n';
+			for (const button in XR_BUTTONS) {
+				if (controllers.left.gamepad.getButton(XR_BUTTONS[button])) {
+					stateString += `  ${button} pressed\n`;
+				}
+			}
+			for (const axis in XR_AXES) {
+				const value = controllers.left.gamepad.getAxis(XR_AXES[axis]);
+				if (Math.abs(value) > 0.1) {
+					stateString += `  ${axis}: ${value.toFixed(2)}\n`;
+				}
+			}
+		}
+		if (controllers.right && controllers.right.gamepad) {
+			stateString += 'Right:\n';
+			for (const button in XR_BUTTONS) {
+				if (controllers.right.gamepad.getButton(XR_BUTTONS[button])) {
+					stateString += `  ${button} pressed\n`;
+				}
+			}
+			for (const axis in XR_AXES) {
+				const value = controllers.right.gamepad.getAxis(XR_AXES[axis]);
+				if (Math.abs(value) > 0.1) {
+					stateString += `  ${axis}: ${value.toFixed(2)}\n`;
+				}
+			}
+		}
+		controllerStateDiv.innerHTML = stateString;
+	}
 	
 	
 }
