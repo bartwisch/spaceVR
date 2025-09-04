@@ -36,20 +36,41 @@ const WALK_SPEED = 0.8;
 const ATTACK_THRESHOLD = 5; // Distance to stop and attack (or idle)
 const WALK_THRESHOLD = 12; // Distance to switch from running to walking
 
-const AVOIDANCE_RADIUS = 3.0; // For cowboy-cowboy avoidance
-const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For cowboy-obstacle avoidance
+const AVOIDANCE_RADIUS = 3.0; // For zombie-zombie avoidance
+const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For zombie-obstacle avoidance
 const AVOIDANCE_STRENGTH = 3.0; // Increased strength
 
-// Cowboy enemies
-const cowboys = [];
-const cowboyMixers = [];
-let cowboyGltf = null;
+// Zombie enemies
+const zombies = [];
+const zombieMixers = [];
+let zombieGltf = null;
 
-// Road and movement
+// Spaceship auto-pilot movement
 let road = null;
 let backgroundPlane = null;
-window.playerPosition = 0; // Make it globally accessible
-let globalCamera = null; // Global reference to camera for cowboy targeting
+let spaceship = null; // The player's spaceship
+window.playerPosition = 0; // Make it globally accessible - represents spaceship position
+let globalCamera = null; // Global reference to camera for zombie targeting
+let autopilotSpeed = 5; // Speed of spaceship auto-pilot
+let spaceshipPath = 0; // Current position along the spaceship's path
+
+// Wave-based spawning system
+let currentWave = 1;
+let zombiesInCurrentWave = 0;
+let maxZombiesPerWave = 5; // Start with 5 zombies per wave
+let zombiesKilled = 0;
+let waveStartTime = 0;
+let timeBetweenWaves = 3; // 3 seconds between waves
+let spawnRate = 2; // Spawn 1 zombie every 2 seconds during wave
+
+// Power-up system
+let activePowerUps = {};
+let powerUpPickups = [];
+const POWERUP_TYPES = {
+	RAPID_FIRE: 'rapidFire',
+	EXPLOSIVE_ROUNDS: 'explosiveRounds',
+	SHIELD: 'shield'
+};
 
 // Mouse controls
 let mouseBlaster = null;
@@ -63,10 +84,10 @@ let laserSound, scoreSound;
 
 
 
-function spawnCowboy(scene) {
-	if (!cowboyGltf || blasterGroup.children.length === 0) {
+function spawnZombie(scene) {
+	if (!zombieGltf || blasterGroup.children.length === 0) {
 		// Also check if blaster is loaded
-		console.log('No cowboy or blaster GLTF loaded yet');
+		console.log('No zombie or blaster GLTF loaded yet');
 		console.log('BlasterGroup children count:', blasterGroup.children.length);
 		if (blasterGroup.children.length > 0) {
 			console.log('First blaster child:', blasterGroup.children[0]);
@@ -74,109 +95,108 @@ function spawnCowboy(scene) {
 		return;
 	}
 
-	console.log('Spawning cowboy...');
+	console.log('Spawning zombie...');
 	console.log('BlasterGroup children count:', blasterGroup.children.length);
 	if (blasterGroup.children.length > 0) {
 		console.log('First blaster child:', blasterGroup.children[0]);
 	}
 	
 	// Properly clone the GLTF scene with animations using SkeletonUtils
-	const cowboy = SkeletonUtils.clone(cowboyGltf.scene);
+	const zombie = SkeletonUtils.clone(zombieGltf.scene);
 	
-	// Set position on either side of the road, close to the player
-	const side = Math.random() > 0.5 ? 1 : -1; // Left or right side
-	const distanceFromRoad = 3 + Math.random() * 2; // 3-5 units from road center
+	// Set position around the spaceship (360° approach)
+	const angle = Math.random() * Math.PI * 2; // Random angle in radians
+	const distance = 15 + Math.random() * 10; // 15-25 units from center
 	
 	// Use window.playerPosition for positioning
-	cowboy.position.set(
-		side * distanceFromRoad,    // X: left or right of road
-		0,                          // Y: ground level
-		-window.playerPosition - 5 - Math.random() * 5  // Z: close to player (5-10 units ahead)
+	zombie.position.set(
+		Math.cos(angle) * distance,    // X: circular position
+		Math.random() * 3,             // Y: slight height variation
+		-window.playerPosition + Math.sin(angle) * distance  // Z: circular position around player
 	);
 	
-	// Make the cowboy face the player's blaster position
-	// Initially point toward a default position, will be updated in onFrame
-	cowboy.lookAt(0, 1.6, -window.playerPosition); // Default to player's eye level
+	// Make the zombie face the spaceship
+	zombie.lookAt(0, 1.6, -window.playerPosition); // Face the spaceship center
 	
-	cowboy.scale.setScalar(1.2);
-	scene.add(cowboy);
-	cowboys.push(cowboy);
+	zombie.scale.setScalar(1.2);
+	scene.add(zombie);
+	zombies.push(zombie);
 	
-	console.log('Cowboy added to scene at position:', cowboy.position);
-	console.log('Total cowboys:', cowboys.length);
+	console.log('Zombie added to scene at position:', zombie.position);
+	console.log('Total zombies:', zombies.length);
 
-	// Store shooting interval for this cowboy
+	// Store shooting interval for this zombie
 	const shootInterval = setInterval(() => {
 		// Shoot at the player every 3 seconds
 		if (globalCamera) {
-			shootAtPlayer(cowboy, scene, globalCamera);
+			shootAtPlayer(zombie, scene, globalCamera);
 		}
 	}, 3000);
 	
 	// Store the interval ID so we can clear it later
-	cowboy.userData.shootInterval = shootInterval;
+	zombie.userData.shootInterval = shootInterval;
 
-	console.log('Cowboy added to scene at position:', cowboy.position);
-	console.log('Total cowboys:', cowboys.length);
+	console.log('Zombie added to scene at position:', zombie.position);
+	console.log('Total zombies:', zombies.length);
 
-	// Setup animation mixer for this cowboy
-	if (cowboyGltf.animations && cowboyGltf.animations.length > 0) {
-		const mixer = new THREE.AnimationMixer(cowboy);
-		const cowboyData = {
+	// Setup animation mixer for this zombie
+	if (zombieGltf.animations && zombieGltf.animations.length > 0) {
+		const mixer = new THREE.AnimationMixer(zombie);
+		const zombieData = {
 			mixer: mixer,
-			animations: cowboyGltf.animations,
+			animations: zombieGltf.animations,
 			currentAction: null,
 			idleAction: null,
 			deathAction: null,
 			walkAction: null,
 			runAction: null
 		};
-		cowboyMixers.push(cowboyData);
+		zombieMixers.push(zombieData);
 		
-		console.log('Setting up animations, found:', cowboyGltf.animations.length, 'animations');
+		console.log('Setting up animations, found:', zombieGltf.animations.length, 'animations');
 		
-		// Find and play wink animation (or first available animation)
+		// Find zombie-specific animations
 		let idleAction = null;
 		let deathAction = null;
 		let walkAction = null;
 		let runAction = null;
 		
-		for (let animation of cowboyGltf.animations) {
+		for (let animation of zombieGltf.animations) {
 			const animName = animation.name.toLowerCase();
-			if (animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
+			if (animName.includes('idle') || animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
 				idleAction = mixer.clipAction(animation);
-			} else if (animName.includes('dead')) {
+			} else if (animName.includes('dead') || animName.includes('death')) {
 				deathAction = mixer.clipAction(animation);
-			} else if (animName.includes('walk')) {
+			} else if (animName.includes('walk') || animName.includes('shamble')) {
 				walkAction = mixer.clipAction(animation);
-			} else if (animName.includes('run')) {
+			} else if (animName.includes('run') || animName.includes('sprint')) {
 				runAction = mixer.clipAction(animation);
 			}
 		}
 		
 		// If no specific animations found, use first animation as idle
-		if (!idleAction && cowboyGltf.animations.length > 0) {
-			idleAction = mixer.clipAction(cowboyGltf.animations[0]);
-			console.log('Using first animation as idle:', cowboyGltf.animations[0].name);
+		if (!idleAction && zombieGltf.animations.length > 0) {
+			idleAction = mixer.clipAction(zombieGltf.animations[0]);
+			console.log('Using first animation as idle:', zombieGltf.animations[0].name);
 		}
 		
 		// Store all animation references
-		cowboyData.idleAction = idleAction;
-		cowboyData.deathAction = deathAction;
-		cowboyData.walkAction = walkAction;
-		cowboyData.runAction = runAction;
+		zombieData.idleAction = idleAction;
+		zombieData.deathAction = deathAction;
+		zombieData.walkAction = walkAction;
+		zombieData.runAction = runAction;
 		
 		// Start with idle animation
 		if (idleAction) {
 			idleAction.setLoop(THREE.LoopRepeat, Infinity);
 			idleAction.play();
-			cowboyData.currentAction = idleAction;
+			zombieData.currentAction = idleAction;
 			console.log('Idle animation started');
 		}
 		
 		// Store animation references in userData
-		cowboy.userData = {
-			...cowboy.userData,
+		zombie.userData = {
+			...zombie.userData,
 			idleAction: idleAction,
 			deathAction: deathAction,
 			walkAction: walkAction,
@@ -185,34 +205,111 @@ function spawnCowboy(scene) {
 		};
 		
 	} else {
-		console.log('No animations found for cowboy');
+		console.log('No animations found for zombie');
 	}
 }
 
-function shootAtPlayer(cowboy, scene, camera) {
-	// Check if cowboy is still alive
-	if (cowboy.userData.hasPlayedDeath) {
+function createPowerUp(scene, position, type) {
+	// Create a simple glowing cube as power-up
+	const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+	let material;
+	
+	switch(type) {
+		case POWERUP_TYPES.RAPID_FIRE:
+			material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.8 });
+			break;
+		case POWERUP_TYPES.EXPLOSIVE_ROUNDS:
+			material = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.8 });
+			break;
+		case POWERUP_TYPES.SHIELD:
+			material = new THREE.MeshBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.8 });
+			break;
+		default:
+			material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
+	}
+	
+	const powerUp = new THREE.Mesh(geometry, material);
+	powerUp.position.copy(position);
+	powerUp.userData = { type: type, createdAt: Date.now() };
+	
+	// Add glowing effect
+	const glowGeometry = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+	const glowMaterial = new THREE.MeshBasicMaterial({ 
+		color: material.color, 
+		transparent: true, 
+		opacity: 0.3,
+		side: THREE.BackSide 
+	});
+	const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+	powerUp.add(glow);
+	
+	scene.add(powerUp);
+	powerUpPickups.push(powerUp);
+	
+	// Animate rotation
+	const animateRotation = () => {
+		powerUp.rotation.x += 0.01;
+		powerUp.rotation.y += 0.02;
+		powerUp.position.y += Math.sin(Date.now() * 0.005) * 0.01; // Floating effect
+	};
+	powerUp.userData.animate = animateRotation;
+	
+	console.log(`Power-up ${type} created at position:`, position);
+}
+
+function activatePowerUp(type) {
+	switch(type) {
+		case POWERUP_TYPES.RAPID_FIRE:
+			activePowerUps.rapidFire = { 
+				active: true, 
+				endTime: Date.now() + 15000, // 15 seconds
+				multiplier: 3 // 3x fire rate
+			};
+			console.log('Rapid Fire activated for 15 seconds!');
+			break;
+		case POWERUP_TYPES.EXPLOSIVE_ROUNDS:
+			activePowerUps.explosiveRounds = { 
+				active: true, 
+				endTime: Date.now() + 10000, // 10 seconds
+				radius: 3 // Explosion radius
+			};
+			console.log('Explosive Rounds activated for 10 seconds!');
+			break;
+		case POWERUP_TYPES.SHIELD:
+			activePowerUps.shield = { 
+				active: true, 
+				endTime: Date.now() + 20000, // 20 seconds
+				hits: 5 // Can absorb 5 hits
+			};
+			console.log('Shield activated for 20 seconds!');
+			break;
+	}
+}
+
+function shootAtPlayer(zombie, scene, camera) {
+	// Check if zombie is still alive
+	if (zombie.userData.hasPlayedDeath) {
 		return;
 	}
 	
-	// Get cowboy's position
-	const cowboyPosition = new THREE.Vector3();
-	cowboy.getWorldPosition(cowboyPosition);
+	// Get zombie's position
+	const zombiePosition = new THREE.Vector3();
+	zombie.getWorldPosition(zombiePosition);
 	
 	// Get player's actual camera position
 	const playerPos = new THREE.Vector3();
 	camera.getWorldPosition(playerPos);
 	
-	// Calculate direction from cowboy to player
-	const direction = new THREE.Vector3().subVectors(playerPos, cowboyPosition).normalize();
+	// Calculate direction from zombie to player
+	const direction = new THREE.Vector3().subVectors(playerPos, zombiePosition).normalize();
 	
 	// Create a bullet
 	const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
 	const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 	const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
 	
-	// Position bullet at cowboy's position
-	bullet.position.copy(cowboyPosition);
+	// Position bullet at zombie's position
+	bullet.position.copy(zombiePosition);
 	
 	// Set bullet velocity
 	const bulletSpeed = 10;
@@ -224,10 +321,10 @@ function shootAtPlayer(cowboy, scene, camera) {
 	scene.add(bullet);
 	
 	// Store bullet for updates
-	if (!window.cowboyBullets) window.cowboyBullets = [];
-	window.cowboyBullets.push(bullet);
+	if (!window.zombieBullets) window.zombieBullets = [];
+	window.zombieBullets.push(bullet);
 	
-	console.log('Cowboy shot at player');
+	console.log('Zombie shot at player');
 }
 
 function fireBullet(scene, position, quaternion) {
@@ -366,7 +463,7 @@ function populateScenery(scene) {
 }
 
 function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
-	// Store global camera reference for cowboy targeting
+	// Store global camera reference for zombie targeting
 	globalCamera = camera;
 	
 	// Create road
@@ -459,11 +556,29 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		console.log('=== BLUE FLAMETHROWER LOADED ===');
 	});
 
-	// Load cowboy enemy
+	// Load spaceship model
+	gltfLoader.load('assets/spacestation.glb', (gltf) => {
+		spaceship = gltf.scene.clone();
+		spaceship.scale.setScalar(2); // Make it bigger
+		spaceship.position.set(0, 0, 0); // Center position
+		scene.add(spaceship);
+		console.log('Spaceship loaded and added to scene');
+	}, undefined, (error) => {
+		console.error('Failed to load spaceship GLTF:', error);
+	});
+
+	// Load zombie enemy (use cowboy model as placeholder)
 	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
-		cowboyGltf = gltf;
-		// Spawn a single test cowboy after a short delay
-		setTimeout(() => spawnCowboy(scene), 2000);
+		zombieGltf = gltf;
+		// Spawn a single test zombie after a short delay
+		setTimeout(() => spawnZombie(scene), 2000);
+		
+		// Spawn test power-ups after a longer delay
+		setTimeout(() => {
+			createPowerUp(scene, new THREE.Vector3(3, 1, -5), POWERUP_TYPES.RAPID_FIRE);
+			createPowerUp(scene, new THREE.Vector3(-3, 1, -8), POWERUP_TYPES.EXPLOSIVE_ROUNDS);
+			createPowerUp(scene, new THREE.Vector3(0, 1, -12), POWERUP_TYPES.SHIELD);
+		}, 5000);
 	});
 
 	// Load and set up positional audio
@@ -608,33 +723,38 @@ function onFrame(
 	_time,
 	{ scene, camera, _renderer, player, controllers },
 ) {
-	// Update player position for forward movement
-	const playerSpeed = 1.5; // Player walking speed
-	window.playerPosition += playerSpeed * delta;
+	// Spaceship auto-pilot movement
+	const spaceshipSpeed = autopilotSpeed;
 	
-	// --- Fly Controls (replaces automatic movement) ---
-    const FLY_SPEED = 10;
-    const forward = new THREE.Vector3();
-    const right = new THREE.Vector3();
-
-    camera.getWorldDirection(forward);
-    forward.y = 0; // Project onto horizontal plane
-    forward.normalize();
-
-    right.crossVectors(forward, camera.up); // Get the right vector
-
-    if (keyStates['KeyW']) { // Forward
-        player.position.add(forward.clone().multiplyScalar(FLY_SPEED * delta));
-    }
-    if (keyStates['KeyS']) { // Backward
-        player.position.add(forward.clone().multiplyScalar(-FLY_SPEED * delta));
-    }
-    if (keyStates['KeyA']) { // Left (strafe)
-        player.position.add(right.clone().multiplyScalar(-FLY_SPEED * delta));
-    }
-    if (keyStates['KeyD']) { // Right (strafe)
-        player.position.add(right.clone().multiplyScalar(FLY_SPEED * delta));
-    }
+	// Move the spaceship automatically through space
+	spaceshipPath += spaceshipSpeed * delta;
+	window.playerPosition += spaceshipSpeed * delta;
+	
+	// Update spaceship position with slight movement pattern
+	if (spaceship) {
+		// Add slight side-to-side and up-down movement for more dynamic feel
+		spaceship.position.x = Math.sin(spaceshipPath * 0.2) * 2; // Side movement
+		spaceship.position.y = Math.cos(spaceshipPath * 0.15) * 1; // Vertical movement
+		spaceship.position.z = -window.playerPosition; // Forward movement
+		
+		// Slight rotation for banking turns
+		spaceship.rotation.z = Math.sin(spaceshipPath * 0.2) * 0.1;
+		spaceship.rotation.x = Math.cos(spaceshipPath * 0.15) * 0.05;
+	}
+	
+	// --- Stationary Turret Mechanics ---
+	// Player is fixed on the spaceship and can only look around and shoot
+	// No manual movement allowed - spaceship moves automatically
+	
+	// Keep player positioned on the spaceship
+	if (spaceship) {
+		// Position player on the spaceship bridge/turret position
+		player.position.set(
+			spaceship.position.x, 
+			spaceship.position.y + 2, // Elevated position for better view
+			spaceship.position.z
+		);
+	}
 	
 	// Update player position tracking
 	window.playerPosition = -player.position.z;
@@ -647,13 +767,13 @@ function onFrame(
 		backgroundPlane.position.z = -window.playerPosition - 150;
 	}
 	
-	// Update cowboys: movement, orientation, and animations
-	for (let i = 0; i < cowboys.length; i++) {
-		const cowboy = cowboys[i];
-		const cowboyData = cowboyMixers[i];
+	// Update zombies: movement, orientation, and animations
+	for (let i = 0; i < zombies.length; i++) {
+		const zombie = zombies[i];
+		const zombieData = zombieMixers[i];
 
-		// Skip logic for cowboys that are "dead" and animating
-		if (cowboy.userData.hasPlayedDeath) {
+		// Skip logic for zombies that are "dead" and animating
+		if (zombie.userData.hasPlayedDeath) {
 			continue;
 		}
 
@@ -662,99 +782,99 @@ function onFrame(
 		camera.getWorldPosition(playerTargetPosition);
 		const lookAtTarget = new THREE.Vector3(
 			playerTargetPosition.x,
-			cowboy.position.y,
+			zombie.position.y,
 			playerTargetPosition.z,
 		);
-		cowboy.lookAt(lookAtTarget);
+		zombie.lookAt(lookAtTarget);
 
 		// --- Movement & Animation ---
-		const distanceToPlayer = cowboy.position.distanceTo(playerTargetPosition);
+		const distanceToPlayer = zombie.position.distanceTo(playerTargetPosition);
 		let moveDirection = new THREE.Vector3();
 		let speed = 0;
 
 		if (distanceToPlayer > WALK_THRESHOLD) {
-			moveDirection.subVectors(lookAtTarget, cowboy.position).normalize();
+			moveDirection.subVectors(lookAtTarget, zombie.position).normalize();
 			speed = RUN_SPEED;
 			// Switch to run animation
-			if (cowboyData.runAction) {
-				if (cowboyData.currentAction !== cowboyData.runAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
+			if (zombieData.runAction) {
+				if (zombieData.currentAction !== zombieData.runAction) {
+					if (zombieData.currentAction) {
+						zombieData.currentAction.fadeOut(0.3);
 					}
-					cowboyData.runAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.runAction;
+					zombieData.runAction.reset().fadeIn(0.3).play();
+					zombieData.currentAction = zombieData.runAction;
 				}
-			} else if (cowboyData.idleAction) {
+			} else if (zombieData.idleAction) {
 				// Fallback to idle if no run animation
-				if (cowboyData.currentAction !== cowboyData.idleAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
+				if (zombieData.currentAction !== zombieData.idleAction) {
+					if (zombieData.currentAction) {
+						zombieData.currentAction.fadeOut(0.3);
 					}
-					cowboyData.idleAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.idleAction;
+					zombieData.idleAction.reset().fadeIn(0.3).play();
+					zombieData.currentAction = zombieData.idleAction;
 				}
 			}
 
 		} else if (distanceToPlayer > ATTACK_THRESHOLD) {
-			moveDirection.subVectors(lookAtTarget, cowboy.position).normalize();
+			moveDirection.subVectors(lookAtTarget, zombie.position).normalize();
 			speed = WALK_SPEED;
 			// Switch to walk animation
-			if (cowboyData.walkAction) {
-				if (cowboyData.currentAction !== cowboyData.walkAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
+			if (zombieData.walkAction) {
+				if (zombieData.currentAction !== zombieData.walkAction) {
+					if (zombieData.currentAction) {
+						zombieData.currentAction.fadeOut(0.3);
 					}
-					cowboyData.walkAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.walkAction;
+					zombieData.walkAction.reset().fadeIn(0.3).play();
+					zombieData.currentAction = zombieData.walkAction;
 				}
-			} else if (cowboyData.idleAction) {
+			} else if (zombieData.idleAction) {
 				// Fallback to idle if no walk animation
-				if (cowboyData.currentAction !== cowboyData.idleAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
+				if (zombieData.currentAction !== zombieData.idleAction) {
+					if (zombieData.currentAction) {
+						zombieData.currentAction.fadeOut(0.3);
 					}
-					cowboyData.idleAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.idleAction;
+					zombieData.idleAction.reset().fadeIn(0.3).play();
+					zombieData.currentAction = zombieData.idleAction;
 				}
 			}
 
 		} else {
 			speed = 0;
 			// Switch to idle animation
-			if (cowboyData.idleAction) {
-				if (cowboyData.currentAction !== cowboyData.idleAction) {
-					if (cowboyData.currentAction) {
-						cowboyData.currentAction.fadeOut(0.3);
+			if (zombieData.idleAction) {
+				if (zombieData.currentAction !== zombieData.idleAction) {
+					if (zombieData.currentAction) {
+						zombieData.currentAction.fadeOut(0.3);
 					}
-					cowboyData.idleAction.reset().fadeIn(0.3).play();
-					cowboyData.currentAction = cowboyData.idleAction;
+					zombieData.idleAction.reset().fadeIn(0.3).play();
+					zombieData.currentAction = zombieData.idleAction;
 				}
 			}
 		}
 
 		// --- Collision Avoidance ---
 		const avoidanceVector = new THREE.Vector3();
-		// Avoid other cowboys
-		for (let j = 0; j < cowboys.length; j++) {
+		// Avoid other zombies
+		for (let j = 0; j < zombies.length; j++) {
 			if (i === j) continue; // Don't check against self
 
-			const otherCowboy = cowboys[j];
-			// Only avoid cowboys that are also alive
-			if (otherCowboy.userData.hasPlayedDeath) continue;
+			const otherZombie = zombies[j];
+			// Only avoid zombies that are also alive
+			if (otherZombie.userData.hasPlayedDeath) continue;
 
-			const distanceToOther = cowboy.position.distanceTo(otherCowboy.position);
+			const distanceToOther = zombie.position.distanceTo(otherZombie.position);
 
 			if (distanceToOther < AVOIDANCE_RADIUS) {
-				const awayVector = new THREE.Vector3().subVectors(cowboy.position, otherCowboy.position).normalize();
+				const awayVector = new THREE.Vector3().subVectors(zombie.position, otherZombie.position).normalize();
 				avoidanceVector.add(awayVector);
 			}
 		}
 
 		// Avoid obstacles (trees, houses)
 		for (const obstacle of obstacles) {
-			const distanceToObstacle = cowboy.position.distanceTo(obstacle.position);
+			const distanceToObstacle = zombie.position.distanceTo(obstacle.position);
 			if (distanceToObstacle < OBSTACLE_AVOIDANCE_RADIUS) {
-				const awayVector = new THREE.Vector3().subVectors(cowboy.position, obstacle.position).normalize();
+				const awayVector = new THREE.Vector3().subVectors(zombie.position, obstacle.position).normalize();
 				avoidanceVector.add(awayVector);
 			}
 		}
@@ -766,26 +886,47 @@ function onFrame(
 		const totalMove = new THREE.Vector3().add(intendedMove).add(avoidanceMove);
 
 		// Apply the final movement
-		cowboy.position.add(totalMove.multiplyScalar(delta));
+		zombie.position.add(totalMove.multiplyScalar(delta));
 	}
 	
-	// Spawn new cowboys periodically
-	if (cowboyGltf && cowboys.length < 20 && Math.random() < 0.1) {
-		spawnCowboy(scene);
-	}
-	
-	// Remove cowboys that are too far behind
-	for (let i = cowboys.length - 1; i >= 0; i--) {
-		const cowboy = cowboys[i];
-		if (cowboy.position.z > -window.playerPosition + 15) { // 15 units behind player
-			// Clear the shooting interval
-			if (cowboy.userData.shootInterval) {
-				clearInterval(cowboy.userData.shootInterval);
+	// Wave-based zombie spawning system
+	if (zombieGltf) {
+		// Check if current wave is complete
+		if (zombiesInCurrentWave >= maxZombiesPerWave && zombies.length === 0) {
+			// Wave complete, start next wave after delay
+			if (Date.now() - waveStartTime > timeBetweenWaves * 1000) {
+				currentWave++;
+				zombiesInCurrentWave = 0;
+				maxZombiesPerWave = Math.min(20, 5 + (currentWave - 1) * 2); // Increase difficulty
+				spawnRate = Math.max(1, spawnRate - 0.1); // Faster spawning each wave
+				waveStartTime = Date.now();
+				console.log(`Starting Wave ${currentWave} with ${maxZombiesPerWave} zombies`);
 			}
-			scene.remove(cowboy);
-			cowboys.splice(i, 1);
-			if (cowboyMixers[i]) {
-				cowboyMixers.splice(i, 1);
+		}
+		
+		// Spawn zombies during active wave
+		if (zombiesInCurrentWave < maxZombiesPerWave && zombies.length < maxZombiesPerWave) {
+			// Check spawn timing
+			if (Math.random() < (1 / (spawnRate * 60))) { // Convert to per-frame probability
+				spawnZombie(scene);
+				zombiesInCurrentWave++;
+				console.log(`Spawned zombie ${zombiesInCurrentWave}/${maxZombiesPerWave} in wave ${currentWave}`);
+			}
+		}
+	}
+	
+	// Remove zombies that are too far behind
+	for (let i = zombies.length - 1; i >= 0; i--) {
+		const zombie = zombies[i];
+		if (zombie.position.z > -window.playerPosition + 15) { // 15 units behind player
+			// Clear the shooting interval
+			if (zombie.userData.shootInterval) {
+				clearInterval(zombie.userData.shootInterval);
+			}
+			scene.remove(zombie);
+			zombies.splice(i, 1);
+			if (zombieMixers[i]) {
+				zombieMixers.splice(i, 1);
 			}
 		}
 	}
@@ -926,66 +1067,66 @@ function onFrame(
 
 		let bulletHit = false;
 
-		// Check collision with cowboys
+		// Check collision with zombies
 		if (!bulletHit) {
-			cowboys.forEach((cowboy, index) => {
+			zombies.forEach((zombie, index) => {
 				if (bulletHit) {
-					console.log('Skipping cowboy check - bullet already hit something');
+					console.log('Skipping zombie check - bullet already hit something');
 					return;
 				}
-				const distance = cowboy.position.distanceTo(bullet.position);
+				const distance = zombie.position.distanceTo(bullet.position);
 				// Increased hitbox size for better collision detection
 				if (distance < 2.0) {
-					console.log('Cowboy collision detected! Distance:', distance, 'Index:', index);
-					console.log('Cowboy position:', cowboy.position);
+					console.log('Zombie collision detected! Distance:', distance, 'Index:', index);
+					console.log('Zombie position:', zombie.position);
 					console.log('Bullet position:', bullet.position);
-					console.log('Cowboys array length before removal:', cowboys.length);
+					console.log('Zombies array length before removal:', zombies.length);
 					bulletHit = true;
 					
 					// Play death animation if available
-					const cowboyData = cowboyMixers[index];
-					if (cowboyData && cowboyData.mixer && cowboy.userData && cowboy.userData.deathAction && !cowboy.userData.hasPlayedDeath) {
+					const zombieData = zombieMixers[index];
+					if (zombieData && zombieData.mixer && zombie.userData && zombie.userData.deathAction && !zombie.userData.hasPlayedDeath) {
 						console.log('Playing death animation in place');
-						cowboy.userData.hasPlayedDeath = true;
+						zombie.userData.hasPlayedDeath = true;
 						
 						// Stop current idle animation
-						if (cowboy.userData.idleAction) {
-							cowboy.userData.idleAction.stop();
+						if (zombie.userData.idleAction) {
+							zombie.userData.idleAction.stop();
 						}
 						
 						// Play death animation
-						const deathAction = cowboy.userData.deathAction;
+						const deathAction = zombie.userData.deathAction;
 						deathAction.setLoop(THREE.LoopOnce, 1);
 						deathAction.clampWhenFinished = true;
 						deathAction.play();
 						
-						// Remove bullet but keep cowboy visible during death animation
+						// Remove bullet but keep zombie visible during death animation
 						console.log('Removing bullet from bullets object and scene');
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
 						
-						// After death animation completes, remove cowboy
+						// After death animation completes, remove zombie
 						setTimeout(() => {
-							console.log('Death animation complete, removing cowboy from scene');
+							console.log('Death animation complete, removing zombie from scene');
 
-							// Find the current index of the cowboy, as it may have changed
-							const currentIndex = cowboys.indexOf(cowboy);
+							// Find the current index of the zombie, as it may have changed
+							const currentIndex = zombies.indexOf(zombie);
 							if (currentIndex === -1) {
-								// Cowboy already removed, do nothing
+								// Zombie already removed, do nothing
 								return;
 							}
 
 							// Clear the shooting interval
-							if (cowboy.userData.shootInterval) {
-								clearInterval(cowboy.userData.shootInterval);
+							if (zombie.userData.shootInterval) {
+								clearInterval(zombie.userData.shootInterval);
 							}
 							
-							scene.remove(cowboy);
-							cowboys.splice(currentIndex, 1);
-							console.log('Cowboys array length after removal:', cowboys.length);
+							scene.remove(zombie);
+							zombies.splice(currentIndex, 1);
+							console.log('Zombies array length after removal:', zombies.length);
 							
 							// Remove corresponding mixer data at the same index
-							cowboyMixers.splice(currentIndex, 1);
+							zombieMixers.splice(currentIndex, 1);
 							
 						}, 4000); // Wait 4 seconds total for death animation
 						
@@ -995,39 +1136,39 @@ function onFrame(
 						console.log('Removing bullet from bullets object and scene');
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
-						console.log('Removing cowboy from scene');
+						console.log('Removing zombie from scene');
 						// Clear the shooting interval
-						if (cowboy.userData.shootInterval) {
-							clearInterval(cowboy.userData.shootInterval);
+						if (zombie.userData.shootInterval) {
+							clearInterval(zombie.userData.shootInterval);
 						}
-						scene.remove(cowboy);
-						cowboys.splice(index, 1);
-						console.log('Cowboys array length after removal:', cowboys.length);
+						scene.remove(zombie);
+						zombies.splice(index, 1);
+						console.log('Zombies array length after removal:', zombies.length);
 						
 						// Remove corresponding mixer data
-						if (cowboyMixers[index]) {
-							cowboyMixers.splice(index, 1);
+						if (zombieMixers[index]) {
+							zombieMixers.splice(index, 1);
 						}
 					}
 
 					// Score display removed - no need to update score
-					console.log('Cowboy hit processing complete');
+					console.log('Zombie hit processing complete');
 				}
 			});
 		}
 	});
 	
-	// Update cowboy animations
-	cowboyMixers.forEach(cowboyData => {
-		if (cowboyData.mixer) {
-			cowboyData.mixer.update(delta);
+	// Update zombie animations
+	zombieMixers.forEach(zombieData => {
+		if (zombieData.mixer) {
+			zombieData.mixer.update(delta);
 		}
 	});
 	
-	// Update cowboy bullets
-	if (window.cowboyBullets) {
-		for (let i = window.cowboyBullets.length - 1; i >= 0; i--) {
-			const bullet = window.cowboyBullets[i];
+	// Update zombie bullets
+	if (window.zombieBullets) {
+		for (let i = window.zombieBullets.length - 1; i >= 0; i--) {
+			const bullet = window.zombieBullets[i];
 			
 			// Update bullet position
 			bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(delta));
@@ -1038,7 +1179,7 @@ function onFrame(
 			// Remove bullet if TTL expired
 			if (bullet.userData.timeToLive <= 0) {
 				scene.remove(bullet);
-				window.cowboyBullets.splice(i, 1);
+				window.zombieBullets.splice(i, 1);
 			}
 			
 			// TODO: Add collision detection with player
@@ -1047,6 +1188,40 @@ function onFrame(
 	
 	// Update flamethrower particles
 	updateFlamethrowerParticles(delta, scene);
+	
+	// Update power-ups
+	// Animate power-up pickups
+	for (let i = powerUpPickups.length - 1; i >= 0; i--) {
+		const powerUp = powerUpPickups[i];
+		if (powerUp.userData.animate) {
+			powerUp.userData.animate();
+		}
+		
+		// Check collision with player/spaceship
+		if (player && powerUp.position.distanceTo(player.position) < 2) {
+			// Activate power-up
+			activatePowerUp(powerUp.userData.type);
+			
+			// Remove power-up
+			scene.remove(powerUp);
+			powerUpPickups.splice(i, 1);
+		}
+		
+		// Remove old power-ups (after 30 seconds)
+		else if (Date.now() - powerUp.userData.createdAt > 30000) {
+			scene.remove(powerUp);
+			powerUpPickups.splice(i, 1);
+		}
+	}
+	
+	// Check for expired power-ups
+	Object.keys(activePowerUps).forEach(key => {
+		const powerUp = activePowerUps[key];
+		if (powerUp.active && Date.now() > powerUp.endTime) {
+			powerUp.active = false;
+			console.log(`${key} power-up expired`);
+		}
+	});
 	
 	gsap.ticker.tick(delta);
 }
@@ -1103,64 +1278,64 @@ function updateFlamethrowerParticles(delta, scene) {
 			);
 		}
 		
-		// Check collision with cowboys
-		for (let j = cowboys.length - 1; j >= 0; j--) {
-			const cowboy = cowboys[j];
-			if (cowboy.userData.hasPlayedDeath) continue;
+		// Check collision with zombies
+		for (let j = zombies.length - 1; j >= 0; j--) {
+			const zombie = zombies[j];
+			if (zombie.userData.hasPlayedDeath) continue;
 			
-			const distance = cowboy.position.distanceTo(particle.position);
+			const distance = zombie.position.distanceTo(particle.position);
 			// Smaller hitbox for flamethrower (particles are small)
 			if (distance < 1.0) {
-				// Kill the cowboy
-				const cowboyData = cowboyMixers[j];
-				if (cowboyData && cowboyData.mixer && cowboy.userData && cowboy.userData.deathAction && !cowboy.userData.hasPlayedDeath) {
-					console.log('Cowboy hit by flamethrower! Distance:', distance);
-					cowboy.userData.hasPlayedDeath = true;
+				// Kill the zombie
+				const zombieData = zombieMixers[j];
+				if (zombieData && zombieData.mixer && zombie.userData && zombie.userData.deathAction && !zombie.userData.hasPlayedDeath) {
+					console.log('Zombie hit by flamethrower! Distance:', distance);
+					zombie.userData.hasPlayedDeath = true;
 					
 					// Stop current idle animation
-					if (cowboy.userData.idleAction) {
-						cowboy.userData.idleAction.stop();
+					if (zombie.userData.idleAction) {
+						zombie.userData.idleAction.stop();
 					}
 					
 					// Play death animation
-					const deathAction = cowboy.userData.deathAction;
+					const deathAction = zombie.userData.deathAction;
 					deathAction.setLoop(THREE.LoopOnce, 1);
 					deathAction.clampWhenFinished = true;
 					deathAction.play();
 					
 					// Clear the shooting interval
-					if (cowboy.userData.shootInterval) {
-						clearInterval(cowboy.userData.shootInterval);
+					if (zombie.userData.shootInterval) {
+						clearInterval(zombie.userData.shootInterval);
 					}
 					
 					// Increase score
 					// Score display removed - no need to update score
 					
-					// Remove the particle that hit the cowboy
+					// Remove the particle that hit the zombie
 					scene.remove(particle);
 					flamethrowerParticlePool.push(particle);
 					flamethrowerParticles.splice(i, 1);
 					
-					// After death animation completes, remove cowboy
+					// After death animation completes, remove zombie
 					setTimeout(() => {
-						// Find the current index of the cowboy, as it may have changed
-						const currentIndex = cowboys.indexOf(cowboy);
+						// Find the current index of the zombie, as it may have changed
+						const currentIndex = zombies.indexOf(zombie);
 						if (currentIndex === -1) {
-							// Cowboy already removed, do nothing
+							// Zombie already removed, do nothing
 							return;
 						}
 
 						// Clear the shooting interval
-						if (cowboy.userData.shootInterval) {
-							clearInterval(cowboy.userData.shootInterval);
+						if (zombie.userData.shootInterval) {
+							clearInterval(zombie.userData.shootInterval);
 						}
 						
-						scene.remove(cowboy);
-						cowboys.splice(currentIndex, 1);
-						console.log('Cowboys array length after removal:', cowboys.length);
+						scene.remove(zombie);
+						zombies.splice(currentIndex, 1);
+						console.log('Zombies array length after removal:', zombies.length);
 						
 						// Remove corresponding mixer data at the same index
-						cowboyMixers.splice(currentIndex, 1);
+						zombieMixers.splice(currentIndex, 1);
 						
 					}, 4000); // Wait 4 seconds total for death animation
 					

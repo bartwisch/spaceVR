@@ -177,17 +177,17 @@ graph TB
 - **Galaga**: Klassische Arcade-Progression
 
 
-Absolut. Hier ist ein detailliertes Game Design Document (GDD), das einer KI als umfassende Anleitung zur Entwicklung des WebXR-Spiels "Tiefsee-Drachen-Odyssee" dienen kann.
+Absolut. Hier ist ein detailliertes Game Design Document (GDD), das einer KI als umfassende Anleitung zur Entwicklung des WebXR-Spiels  "spaceVR" dienen kann.
 
-Game Design Document: Tiefsee-Drachen-Odyssee
+Game Design Document: spaceVR
 
 Version: 1.0
 Datum: 4. September 2025
-Projekt-Codename: DragonRideXR
+Projekt-Codename: spaceVR
 
 1. Executive Summary
 
-"Tiefsee-Drachen-Odyssee" ist ein kooperativer On-Rail-Shooter für die WebXR-Plattform. Spieler reiten auf fliegenden Meeresdrachen durch visuell beeindruckende Wasser- und Höhlenlandschaften und bekämpfen Wellen von feindlichen Kreaturen. Das Gameplay ist auf schnelle, arcade-ähnliche Action und intuitive Steuerung ausgelegt. Den Höhepunkt jedes Levels bildet ein epischer Kampf gegen ein riesiges Seeungeheuer. Das Spiel wird mit Web-Technologien (vorzugsweise A-Frame oder Three.js) entwickelt, um maximale Zugänglichkeit ohne Installation auf gängigen VR-Brillen zu gewährleisten.
+das spiel ist ein kooperativer On-Rail-Shooter für die WebXR-Plattform. Spieler fliegt mit einem raumschiff visuell durch weltraumlandschaften und bekämpfen Wellen von feindlichen Kreaturen. Das Gameplay ist auf schnelle, arcade-ähnliche Action und intuitive Steuerung ausgelegt. Den Höhepunkt jedes Levels bildet ein epischer Kampf gegen ein riesiges Seeungeheuer. Das Spiel wird mit Web-Technologien (vorzugsweise A-Frame oder Three.js) entwickelt, um maximale Zugänglichkeit ohne Installation auf gängigen VR-Brillen zu gewährleisten.
 
 2. Spielkonzept & Vision
 
@@ -197,7 +197,7 @@ Zielplattform: WebXR (optimiert für Standalone-VR-Brillen wie Meta Quest 2/3, P
 
 Zielgruppe: Casual- bis Mid-Core-VR-Spieler, die schnelle Action und kooperative Erlebnisse mögen.
 
-Kernvision: Ein sofort zugängliches, visuell fesselndes VR-Erlebnis schaffen, das den Nervenkitzel von Seeschlachten und Monsterjagden aus dem Referenzvideo einfängt und in ein leicht verständliches Arcade-Format übersetzt. Der Fokus liegt auf dem "Flow-State" des ununterbrochenen Schießens und dem befriedigenden Gefühl, gemeinsam mit einem Partner übermächtige Feinde zu besiegen.
+
 
 3. Gameplay-Mechaniken
 3.1. Core-Gameplay-Loop
@@ -238,13 +238,13 @@ Schild: Ein temporärer Energieschild, der eine begrenzte Anzahl von Treffern ab
 
 4. Gegnerdesign
 
-"Himmels-Piranhas" (Schwarmgegner): Kleine, fliegende Fischmonster, die in großen Gruppen angreifen und schnelle, aber schwache Projektile verschießen.
+"space Himmels-Piranhas" (Schwarmgegner): Kleine, fliegende Fischmonster, die in großen Gruppen angreifen und schnelle, aber schwache Projektile verschießen.
 
-"Höhlen-Fledermäuse" (Agile Gegner): Ähnlich wie im Referenzvideo. Greifen schnell und in unvorhersehbaren Mustern an. Weichen Schüssen aus.
+"space Höhlen-Fledermäuse" (Agile Gegner): Ähnlich wie im Referenzvideo. Greifen schnell und in unvorhersehbaren Mustern an. Weichen Schüssen aus.
 
-"Gepanzerte Krabben" (Tank-Gegner): Langsame, stark gepanzerte Kreaturen, die auf Felsen sitzen und gezielte, starke Energiestöße abfeuern. Ihr Panzer muss erst zerstört werden.
+"space Gepanzerte Krabben" (Tank-Gegner): Langsame, stark gepanzerte Kreaturen, die auf Felsen sitzen und gezielte, starke Energiestöße abfeuern. Ihr Panzer muss erst zerstört werden.
 
-Boss: "Der Kraken-Titan": Ein riesiges Seeungeheuer, das aus der Tiefe aufsteigt.
+"space Boss: "Der Kraken-Titan": Ein riesiges Seeungeheuer, das aus der Tiefe aufsteigt.
 
 Angriffe: Schlägt mit Tentakeln, verschießt Tinte, um die Sicht zu behindern, und beschwört kleinere Helfer-Gegner.
 
@@ -252,7 +252,7 @@ Schwachpunkte: Leuchtende Energieknoten an den Tentakeln und am Kopf. Müssen in
 
 5. Leveldesign & Spielwelt
 
-Visueller Stil: Inspiriert vom Video – eine Mischung aus Steampunk-Ästhetik (Drachenkanonen), Fantasy (Kreaturen) und einer mystischen, nebligen Naturkulisse mit imposanten Wasserfällen, leuchtenden Kristallen und antiken Ruinen.
+Visueller Stil: Inspiriert vom Video – eine Mischung aus cyberpunk und Steampunk-Ästhetik (Drachenkanonen), Fantasy (Kreaturen) und einer mystischen, nebligen Naturkulisse mit imposanten Wasserfällen, leuchtenden Kristallen und antiken Ruinen.
 
 Level 1: Die vergessene Bucht
 

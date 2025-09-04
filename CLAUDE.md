@@ -11,6 +11,7 @@ This is a WebXR project built with Three.js that creates an immersive spaceVR ga
 - `npm run dev` - Start development server on port 8081 with HTTPS (required for WebXR)
 - `npm run build` - Build for production (outputs to `dist/` directory)  
 - `npm run format` - Format code using Prettier
+- `npm run launch` - Launch development server in Puppeteer browser with WebXR flags enabled
 
 ## Architecture
 
@@ -19,7 +20,9 @@ This is a WebXR project built with Three.js that creates an immersive spaceVR ga
 - **`src/index.js`** - Main application logic containing game mechanics, bullet physics, scoring, and both VR/mouse control handling
 - **`src/init.js`** - WebXR initialization and emulation setup using IWER (Immersive Web Emulation Runtime)
 - **`src/index.html`** - Entry HTML template
+- **`src/test-cowboy.js`** - Standalone test page for cowboy enemy AI development and debugging
 - **`src/assets/`** - 3D models (GLB/GLTF), audio files (OGG), and fonts
+- **`launch.js`** - Puppeteer automation script for launching development server with WebXR browser flags
 
 ### Key Architecture Components
 
@@ -41,10 +44,16 @@ This is a WebXR project built with Three.js that creates an immersive spaceVR ga
 
 **Development Workflow**
 - Webpack dev server configured for HTTPS (WebXR requirement) on all network interfaces
-- ESLint integration with import sorting rules enforced (enforces specific member syntax sort order)
+- ESLint integration with import sorting rules enforced (enforces specific member syntax sort order: `none`, `all`, `multiple`, `single`)
+- Prettier code formatting with automatic formatting via `npm run format`
 - Auto-copy of assets and favicon to dist during build
 - Source maps enabled for debugging
 - Multi-entry setup: main game (`index.js`) and test page (`test-cowboy.js`)
+
+**Testing and Development Tools**
+- Puppeteer automation script (`launch.js`) launches development server with optimized WebXR browser flags
+- Test page (`test-cowboy.html`) provides isolated environment for cowboy AI development
+- IWER DevUI provides desktop controller simulation and "Play Mode" for FPS-style navigation
 
 ## WebXR Development Notes
 
