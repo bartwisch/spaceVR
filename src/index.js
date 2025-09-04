@@ -27,6 +27,16 @@ let flamethrowerParticles = [];
 let maxFlamethrowerParticles = 100;
 let flamethrowerParticlePool = [];
 
+// Jetpack particles for space cowboys
+let jetpackParticles = [];
+let maxJetpackParticles = 200;
+let jetpackParticlePool = [];
+
+// Space environment
+let asteroids = [];
+let stars = [];
+let nebulaClouds = [];
+
 // Weapon switching
 let currentWeapon = 0; // 0 = red weapon, 1 = blue weapon (flamethrower)
 const weapons = [blasterGroup, blueBlasterGroup];
@@ -36,32 +46,32 @@ const WALK_SPEED = 0.8;
 const ATTACK_THRESHOLD = 5; // Distance to stop and attack (or idle)
 const WALK_THRESHOLD = 12; // Distance to switch from running to walking
 
-const AVOIDANCE_RADIUS = 3.0; // For zombie-zombie avoidance
-const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For zombie-obstacle avoidance
+const AVOIDANCE_RADIUS = 3.0; // For space cowboy-space cowboy avoidance
+const OBSTACLE_AVOIDANCE_RADIUS = 8.0; // For space cowboy-obstacle avoidance
 const AVOIDANCE_STRENGTH = 3.0; // Increased strength
 
-// Zombie enemies
-const zombies = [];
-const zombieMixers = [];
-let zombieGltf = null;
+// Space Cowboy enemies
+const spaceCowboys = [];
+const spaceCowboyMixers = [];
+let spaceCowboyGltf = null;
 
 // Spaceship auto-pilot movement
 let road = null;
 let backgroundPlane = null;
 let spaceship = null; // The player's spaceship
 window.playerPosition = 0; // Make it globally accessible - represents spaceship position
-let globalCamera = null; // Global reference to camera for zombie targeting
+let globalCamera = null; // Global reference to camera for spaceCowboy targeting
 let autopilotSpeed = 5; // Speed of spaceship auto-pilot
 let spaceshipPath = 0; // Current position along the spaceship's path
 
-// Wave-based spawning system
+// Wave-based space cowboy spawning system
 let currentWave = 1;
-let zombiesInCurrentWave = 0;
-let maxZombiesPerWave = 5; // Start with 5 zombies per wave
-let zombiesKilled = 0;
+let spaceCowboysInCurrentWave = 0;
+let maxSpaceCowboysPerWave = 5; // Start with 5 spaceCowboys per wave
+let spaceCowboysKilled = 0;
 let waveStartTime = 0;
 let timeBetweenWaves = 3; // 3 seconds between waves
-let spawnRate = 2; // Spawn 1 zombie every 2 seconds during wave
+let spawnRate = 2; // Spawn 1 spaceCowboy every 2 seconds during wave
 
 // Power-up system
 let activePowerUps = {};
@@ -80,14 +90,14 @@ const raycaster = new THREE.Raycaster();
 const keyStates = {};
 const obstacles = [];
 
-let laserSound, scoreSound;
+let laserSound, scoreSound, cowboyCallouts, alienHisses;
 
 
 
-function spawnZombie(scene) {
-	if (!zombieGltf || blasterGroup.children.length === 0) {
+function spawnSpaceCowboy(scene) {
+	if (!spaceCowboyGltf || blasterGroup.children.length === 0) {
 		// Also check if blaster is loaded
-		console.log('No zombie or blaster GLTF loaded yet');
+		console.log('No spaceCowboy or blaster GLTF loaded yet');
 		console.log('BlasterGroup children count:', blasterGroup.children.length);
 		if (blasterGroup.children.length > 0) {
 			console.log('First blaster child:', blasterGroup.children[0]);
@@ -95,73 +105,78 @@ function spawnZombie(scene) {
 		return;
 	}
 
-	console.log('Spawning zombie...');
+	console.log('Spawning spaceCowboy...');
 	console.log('BlasterGroup children count:', blasterGroup.children.length);
 	if (blasterGroup.children.length > 0) {
 		console.log('First blaster child:', blasterGroup.children[0]);
 	}
 	
 	// Properly clone the GLTF scene with animations using SkeletonUtils
-	const zombie = SkeletonUtils.clone(zombieGltf.scene);
+	const spaceCowboy = SkeletonUtils.clone(spaceCowboyGltf.scene);
 	
 	// Set position around the spaceship (360° approach)
 	const angle = Math.random() * Math.PI * 2; // Random angle in radians
 	const distance = 15 + Math.random() * 10; // 15-25 units from center
 	
 	// Use window.playerPosition for positioning
-	zombie.position.set(
+	spaceCowboy.position.set(
 		Math.cos(angle) * distance,    // X: circular position
 		Math.random() * 3,             // Y: slight height variation
 		-window.playerPosition + Math.sin(angle) * distance  // Z: circular position around player
 	);
 	
-	// Make the zombie face the spaceship
-	zombie.lookAt(0, 1.6, -window.playerPosition); // Face the spaceship center
+	// Make the spaceCowboy face the spaceship
+	spaceCowboy.lookAt(0, 1.6, -window.playerPosition); // Face the spaceship center
 	
-	zombie.scale.setScalar(1.2);
-	scene.add(zombie);
-	zombies.push(zombie);
+	spaceCowboy.scale.setScalar(1.2);
+	scene.add(spaceCowboy);
+	spaceCowboys.push(spaceCowboy);
 	
-	console.log('Zombie added to scene at position:', zombie.position);
-	console.log('Total zombies:', zombies.length);
+	console.log('Space Cowboy added to scene at position:', spaceCowboy.position);
+	console.log('Total Space Cowboys:', spaceCowboys.length);
 
-	// Store shooting interval for this zombie
+	// Play space cowboy callout when spawning (30% chance)
+	if (Math.random() < 0.3) {
+		setTimeout(() => playSpaceCowboyCallout(), Math.random() * 2000); // Random delay 0-2 seconds
+	}
+
+	// Store shooting interval for this space cowboy
 	const shootInterval = setInterval(() => {
 		// Shoot at the player every 3 seconds
 		if (globalCamera) {
-			shootAtPlayer(zombie, scene, globalCamera);
+			shootAtPlayer(spaceCowboy, scene, globalCamera);
 		}
 	}, 3000);
 	
 	// Store the interval ID so we can clear it later
-	zombie.userData.shootInterval = shootInterval;
+	spaceCowboy.userData.shootInterval = shootInterval;
 
-	console.log('Zombie added to scene at position:', zombie.position);
-	console.log('Total zombies:', zombies.length);
+	console.log('Zombie added to scene at position:', spaceCowboy.position);
+	console.log('Total spaceCowboys:', spaceCowboys.length);
 
-	// Setup animation mixer for this zombie
-	if (zombieGltf.animations && zombieGltf.animations.length > 0) {
-		const mixer = new THREE.AnimationMixer(zombie);
-		const zombieData = {
+	// Setup animation mixer for this spaceCowboy
+	if (spaceCowboyGltf.animations && spaceCowboyGltf.animations.length > 0) {
+		const mixer = new THREE.AnimationMixer(spaceCowboy);
+		const spaceCowboyData = {
 			mixer: mixer,
-			animations: zombieGltf.animations,
+			animations: spaceCowboyGltf.animations,
 			currentAction: null,
 			idleAction: null,
 			deathAction: null,
 			walkAction: null,
 			runAction: null
 		};
-		zombieMixers.push(zombieData);
+		spaceCowboyMixers.push(spaceCowboyData);
 		
-		console.log('Setting up animations, found:', zombieGltf.animations.length, 'animations');
+		console.log('Setting up animations, found:', spaceCowboyGltf.animations.length, 'animations');
 		
-		// Find zombie-specific animations
+		// Find spaceCowboy-specific animations
 		let idleAction = null;
 		let deathAction = null;
 		let walkAction = null;
 		let runAction = null;
 		
-		for (let animation of zombieGltf.animations) {
+		for (let animation of spaceCowboyGltf.animations) {
 			const animName = animation.name.toLowerCase();
 			if (animName.includes('idle') || animName.includes('wink') || animName.includes('wave') || animName.includes('greeting')) {
 				idleAction = mixer.clipAction(animation);
@@ -175,28 +190,28 @@ function spawnZombie(scene) {
 		}
 		
 		// If no specific animations found, use first animation as idle
-		if (!idleAction && zombieGltf.animations.length > 0) {
-			idleAction = mixer.clipAction(zombieGltf.animations[0]);
-			console.log('Using first animation as idle:', zombieGltf.animations[0].name);
+		if (!idleAction && spaceCowboyGltf.animations.length > 0) {
+			idleAction = mixer.clipAction(spaceCowboyGltf.animations[0]);
+			console.log('Using first animation as idle:', spaceCowboyGltf.animations[0].name);
 		}
 		
 		// Store all animation references
-		zombieData.idleAction = idleAction;
-		zombieData.deathAction = deathAction;
-		zombieData.walkAction = walkAction;
-		zombieData.runAction = runAction;
+		spaceCowboyData.idleAction = idleAction;
+		spaceCowboyData.deathAction = deathAction;
+		spaceCowboyData.walkAction = walkAction;
+		spaceCowboyData.runAction = runAction;
 		
 		// Start with idle animation
 		if (idleAction) {
 			idleAction.setLoop(THREE.LoopRepeat, Infinity);
 			idleAction.play();
-			zombieData.currentAction = idleAction;
+			spaceCowboyData.currentAction = idleAction;
 			console.log('Idle animation started');
 		}
 		
 		// Store animation references in userData
-		zombie.userData = {
-			...zombie.userData,
+		spaceCowboy.userData = {
+			...spaceCowboy.userData,
 			idleAction: idleAction,
 			deathAction: deathAction,
 			walkAction: walkAction,
@@ -205,7 +220,7 @@ function spawnZombie(scene) {
 		};
 		
 	} else {
-		console.log('No animations found for zombie');
+		console.log('No animations found for spaceCowboy');
 	}
 }
 
@@ -286,30 +301,297 @@ function activatePowerUp(type) {
 	}
 }
 
-function shootAtPlayer(zombie, scene, camera) {
-	// Check if zombie is still alive
-	if (zombie.userData.hasPlayedDeath) {
+function createSpaceEnvironment(scene) {
+	// Create starfield background
+	createStarfield(scene);
+	
+	// Create rotating asteroids
+	createAsteroids(scene);
+	
+	// Create nebula clouds
+	createNebulaClouds(scene);
+}
+
+function createStarfield(scene) {
+	const starGeometry = new THREE.BufferGeometry();
+	const starCount = 1000;
+	const positions = new Float32Array(starCount * 3);
+	
+	for (let i = 0; i < starCount * 3; i += 3) {
+		// Random positions in a large sphere around the scene
+		const radius = 500 + Math.random() * 1000;
+		const theta = Math.random() * Math.PI * 2;
+		const phi = Math.random() * Math.PI;
+		
+		positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+		positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta);
+		positions[i + 2] = radius * Math.cos(phi);
+	}
+	
+	starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+	
+	const starMaterial = new THREE.PointsMaterial({
+		color: 0xffffff,
+		size: 2,
+		transparent: true,
+		opacity: 0.8
+	});
+	
+	const starField = new THREE.Points(starGeometry, starMaterial);
+	scene.add(starField);
+	stars.push(starField);
+}
+
+function createAsteroids(scene) {
+	for (let i = 0; i < 20; i++) {
+		const size = 0.5 + Math.random() * 2;
+		
+		// Create irregular asteroid shape
+		const geometry = new THREE.DodecahedronGeometry(size, 0);
+		
+		// Randomize vertices for irregular shape
+		const vertices = geometry.attributes.position.array;
+		for (let j = 0; j < vertices.length; j += 3) {
+			vertices[j] *= 0.8 + Math.random() * 0.4;
+			vertices[j + 1] *= 0.8 + Math.random() * 0.4;
+			vertices[j + 2] *= 0.8 + Math.random() * 0.4;
+		}
+		geometry.attributes.position.needsUpdate = true;
+		geometry.computeVertexNormals();
+		
+		const material = new THREE.MeshLambertMaterial({ 
+			color: new THREE.Color().setHSL(0.1, 0.3, 0.3 + Math.random() * 0.3),
+			flatShading: true
+		});
+		
+		const asteroid = new THREE.Mesh(geometry, material);
+		
+		// Random position around the scene
+		const angle = Math.random() * Math.PI * 2;
+		const distance = 30 + Math.random() * 50;
+		asteroid.position.set(
+			Math.cos(angle) * distance,
+			(Math.random() - 0.5) * 20,
+			Math.sin(angle) * distance - window.playerPosition
+		);
+		
+		// Random rotation
+		asteroid.rotation.set(
+			Math.random() * Math.PI,
+			Math.random() * Math.PI,
+			Math.random() * Math.PI
+		);
+		
+		// Store rotation speeds
+		asteroid.userData = {
+			rotationSpeed: new THREE.Vector3(
+				(Math.random() - 0.5) * 0.02,
+				(Math.random() - 0.5) * 0.02,
+				(Math.random() - 0.5) * 0.02
+			)
+		};
+		
+		scene.add(asteroid);
+		asteroids.push(asteroid);
+		obstacles.push(asteroid); // Add to obstacles for collision detection
+	}
+}
+
+function createNebulaClouds(scene) {
+	for (let i = 0; i < 5; i++) {
+		const geometry = new THREE.SphereGeometry(10 + Math.random() * 20, 8, 6);
+		const material = new THREE.MeshBasicMaterial({
+			color: new THREE.Color().setHSL(0.6 + Math.random() * 0.4, 0.5, 0.3),
+			transparent: true,
+			opacity: 0.1 + Math.random() * 0.1,
+			side: THREE.DoubleSide
+		});
+		
+		const nebula = new THREE.Mesh(geometry, material);
+		
+		// Position nebula clouds in the distance
+		nebula.position.set(
+			(Math.random() - 0.5) * 200,
+			(Math.random() - 0.5) * 100,
+			-100 - Math.random() * 200
+		);
+		
+		scene.add(nebula);
+		nebulaClouds.push(nebula);
+	}
+}
+
+function createSpaceCowboyCallouts() {
+	// Create audio callouts for space cowboys
+	const callouts = [
+		"Yeehaw! Space ain't big enough for the both of us!",
+		"Draw, partner!",
+		"This here's my sector now!",
+		"Giddyup, space cowpoke!",
+		"Time to rustle some spaceship parts!",
+		"Houston, we got a cowboy problem!",
+		"Saddle up them rocket boots!"
+	];
+	
+	cowboyCallouts = callouts;
+}
+
+function playSpaceCowboyCallout() {
+	if (cowboyCallouts && cowboyCallouts.length > 0) {
+		const randomCallout = cowboyCallouts[Math.floor(Math.random() * cowboyCallouts.length)];
+		console.log(`🤠 Space Cowboy: "${randomCallout}"`);
+		
+		// TODO: Replace with actual audio playback when audio files are available
+		// const audio = new Audio(`audio/cowboy_${index}.ogg`);
+		// audio.volume = 0.5;
+		// audio.play();
+	}
+}
+
+function createAlienSounds() {
+	// Create alien communication sounds
+	const alienSounds = [
+		"*bioelectric hiss*",
+		"*clicking sounds*", 
+		"*alien shriek*",
+		"*plasma charge noise*",
+		"*telepathic buzz*"
+	];
+	
+	alienHisses = alienSounds;
+}
+
+function playAlienSound() {
+	if (alienHisses && alienHisses.length > 0) {
+		const randomSound = alienHisses[Math.floor(Math.random() * alienHisses.length)];
+		console.log(`👽 Alien: ${randomSound}`);
+		
+		// TODO: Replace with actual audio playback when audio files are available
+		// const audio = new Audio(`audio/alien_${index}.ogg`);
+		// audio.volume = 0.3;
+		// audio.play();
+	}
+}
+
+function updateSpaceEnvironment(delta) {
+	// Rotate asteroids
+	asteroids.forEach(asteroid => {
+		asteroid.rotation.x += asteroid.userData.rotationSpeed.x;
+		asteroid.rotation.y += asteroid.userData.rotationSpeed.y;
+		asteroid.rotation.z += asteroid.userData.rotationSpeed.z;
+	});
+	
+	// Animate nebula clouds (subtle pulsing)
+	nebulaClouds.forEach((nebula, index) => {
+		const time = Date.now() * 0.001 + index;
+		nebula.material.opacity = 0.1 + Math.sin(time * 0.5) * 0.05;
+		nebula.scale.setScalar(0.9 + Math.sin(time * 0.3) * 0.1);
+	});
+}
+
+function createJetpackParticle(spaceCowboy) {
+	// Reuse particles from pool if available
+	if (jetpackParticlePool.length > 0) {
+		const particle = jetpackParticlePool.pop();
+		resetJetpackParticle(particle, spaceCowboy);
+		return particle;
+	}
+
+	const geometry = new THREE.SphereGeometry(0.02, 6, 6);
+	const material = new THREE.MeshBasicMaterial({ 
+		color: new THREE.Color().setHSL(0.1, 1, 0.6), // Orange flame color
+		transparent: true,
+		opacity: 0.8
+	});
+	
+	const particle = new THREE.Mesh(geometry, material);
+	resetJetpackParticle(particle, spaceCowboy);
+	
+	return particle;
+}
+
+function resetJetpackParticle(particle, spaceCowboy) {
+	// Position at the space cowboy's back (jetpack location)
+	const jetpackOffset = new THREE.Vector3(0, -0.5, 0.3); // Behind and below
+	particle.position.copy(spaceCowboy.position).add(jetpackOffset);
+	
+	// Random spread for jetpack exhaust
+	particle.position.x += (Math.random() - 0.5) * 0.2;
+	particle.position.y += (Math.random() - 0.5) * 0.2;
+	particle.position.z += (Math.random() - 0.5) * 0.2;
+	
+	// Jetpack exhaust direction (downward and slightly behind)
+	particle.userData = {
+		velocity: new THREE.Vector3(
+			(Math.random() - 0.5) * 2,
+			-3 - Math.random() * 2, // Downward thrust
+			-1 - Math.random() * 2  // Backward thrust
+		),
+		life: 1.0,
+		maxLife: 1.0 + Math.random() * 0.5,
+		startColor: new THREE.Color().setHSL(0.1, 1, 0.8), // Bright orange
+		endColor: new THREE.Color().setHSL(0.0, 1, 0.2)    // Dark red
+	};
+	
+	particle.material.color.copy(particle.userData.startColor);
+	particle.material.opacity = 0.8;
+	particle.scale.setScalar(0.5 + Math.random() * 0.5);
+}
+
+function updateJetpackParticles(delta, scene) {
+	for (let i = jetpackParticles.length - 1; i >= 0; i--) {
+		const particle = jetpackParticles[i];
+		const userData = particle.userData;
+		
+		// Update position
+		particle.position.add(userData.velocity.clone().multiplyScalar(delta));
+		
+		// Update life
+		userData.life -= delta;
+		const lifeRatio = userData.life / userData.maxLife;
+		
+		if (lifeRatio <= 0) {
+			// Remove particle
+			scene.remove(particle);
+			jetpackParticles.splice(i, 1);
+			
+			// Return to pool for reuse
+			if (jetpackParticlePool.length < maxJetpackParticles) {
+				jetpackParticlePool.push(particle);
+			}
+		} else {
+			// Update visual properties
+			particle.material.color.lerpColors(userData.endColor, userData.startColor, lifeRatio);
+			particle.material.opacity = lifeRatio * 0.8;
+			particle.scale.setScalar(lifeRatio * (0.5 + Math.random() * 0.3));
+		}
+	}
+}
+
+function shootAtPlayer(spaceCowboy, scene, camera) {
+	// Check if space cowboy is still alive
+	if (spaceCowboy.userData.hasPlayedDeath) {
 		return;
 	}
 	
-	// Get zombie's position
-	const zombiePosition = new THREE.Vector3();
-	zombie.getWorldPosition(zombiePosition);
+	// Get space cowboy's position
+	const spaceCowboyPosition = new THREE.Vector3();
+	spaceCowboy.getWorldPosition(spaceCowboyPosition);
 	
 	// Get player's actual camera position
 	const playerPos = new THREE.Vector3();
 	camera.getWorldPosition(playerPos);
 	
-	// Calculate direction from zombie to player
-	const direction = new THREE.Vector3().subVectors(playerPos, zombiePosition).normalize();
+	// Calculate direction from spaceCowboy to player
+	const direction = new THREE.Vector3().subVectors(playerPos, spaceCowboyPosition).normalize();
 	
 	// Create a bullet
 	const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
 	const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 	const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
 	
-	// Position bullet at zombie's position
-	bullet.position.copy(zombiePosition);
+	// Position bullet at spaceCowboy's position
+	bullet.position.copy(spaceCowboyPosition);
 	
 	// Set bullet velocity
 	const bulletSpeed = 10;
@@ -321,8 +603,8 @@ function shootAtPlayer(zombie, scene, camera) {
 	scene.add(bullet);
 	
 	// Store bullet for updates
-	if (!window.zombieBullets) window.zombieBullets = [];
-	window.zombieBullets.push(bullet);
+	if (!window.spaceCowboyBullets) window.spaceCowboyBullets = [];
+	window.spaceCowboyBullets.push(bullet);
 	
 	console.log('Zombie shot at player');
 }
@@ -463,15 +745,22 @@ function populateScenery(scene) {
 }
 
 function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
-	// Store global camera reference for zombie targeting
+	// Store global camera reference for space cowboy targeting
 	globalCamera = camera;
 	
-	// Create road
+	// Create space environment instead of road
+	createSpaceEnvironment(scene);
+	
+	// Initialize space-western audio system
+	createSpaceCowboyCallouts();
+	createAlienSounds();
+	
+	// Create road (keep for collision system)
 	createRoad(scene);
 	populateScenery(scene);
 	
-	// Add some basic environment elements
-	const ambientLight = new THREE.AmbientLight(0x404040, 2);
+	// Space environment lighting
+	const ambientLight = new THREE.AmbientLight(0x202040, 1.5); // Darker space ambient
 	scene.add(ambientLight);
 	
 	const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -567,11 +856,11 @@ function setupScene({ scene, camera, _renderer, player, _controllers, controls }
 		console.error('Failed to load spaceship GLTF:', error);
 	});
 
-	// Load zombie enemy (use cowboy model as placeholder)
+	// Load spaceCowboy enemy (use cowboy model as placeholder)
 	gltfLoader.load('assets/cowboy1.glb', (gltf) => {
-		zombieGltf = gltf;
-		// Spawn a single test zombie after a short delay
-		setTimeout(() => spawnZombie(scene), 2000);
+		spaceCowboyGltf = gltf;
+		// Spawn a single test spaceCowboy after a short delay
+		setTimeout(() => spawnSpaceCowboy(scene), 2000);
 		
 		// Spawn test power-ups after a longer delay
 		setTimeout(() => {
@@ -767,13 +1056,13 @@ function onFrame(
 		backgroundPlane.position.z = -window.playerPosition - 150;
 	}
 	
-	// Update zombies: movement, orientation, and animations
-	for (let i = 0; i < zombies.length; i++) {
-		const zombie = zombies[i];
-		const zombieData = zombieMixers[i];
+	// Update spaceCowboys: movement, orientation, and animations
+	for (let i = 0; i < spaceCowboys.length; i++) {
+		const spaceCowboy = spaceCowboys[i];
+		const spaceCowboyData = spaceCowboyMixers[i];
 
-		// Skip logic for zombies that are "dead" and animating
-		if (zombie.userData.hasPlayedDeath) {
+		// Skip logic for spaceCowboys that are "dead" and animating
+		if (spaceCowboy.userData.hasPlayedDeath) {
 			continue;
 		}
 
@@ -782,99 +1071,99 @@ function onFrame(
 		camera.getWorldPosition(playerTargetPosition);
 		const lookAtTarget = new THREE.Vector3(
 			playerTargetPosition.x,
-			zombie.position.y,
+			spaceCowboy.position.y,
 			playerTargetPosition.z,
 		);
-		zombie.lookAt(lookAtTarget);
+		spaceCowboy.lookAt(lookAtTarget);
 
 		// --- Movement & Animation ---
-		const distanceToPlayer = zombie.position.distanceTo(playerTargetPosition);
+		const distanceToPlayer = spaceCowboy.position.distanceTo(playerTargetPosition);
 		let moveDirection = new THREE.Vector3();
 		let speed = 0;
 
 		if (distanceToPlayer > WALK_THRESHOLD) {
-			moveDirection.subVectors(lookAtTarget, zombie.position).normalize();
+			moveDirection.subVectors(lookAtTarget, spaceCowboy.position).normalize();
 			speed = RUN_SPEED;
 			// Switch to run animation
-			if (zombieData.runAction) {
-				if (zombieData.currentAction !== zombieData.runAction) {
-					if (zombieData.currentAction) {
-						zombieData.currentAction.fadeOut(0.3);
+			if (spaceCowboyData.runAction) {
+				if (spaceCowboyData.currentAction !== spaceCowboyData.runAction) {
+					if (spaceCowboyData.currentAction) {
+						spaceCowboyData.currentAction.fadeOut(0.3);
 					}
-					zombieData.runAction.reset().fadeIn(0.3).play();
-					zombieData.currentAction = zombieData.runAction;
+					spaceCowboyData.runAction.reset().fadeIn(0.3).play();
+					spaceCowboyData.currentAction = spaceCowboyData.runAction;
 				}
-			} else if (zombieData.idleAction) {
+			} else if (spaceCowboyData.idleAction) {
 				// Fallback to idle if no run animation
-				if (zombieData.currentAction !== zombieData.idleAction) {
-					if (zombieData.currentAction) {
-						zombieData.currentAction.fadeOut(0.3);
+				if (spaceCowboyData.currentAction !== spaceCowboyData.idleAction) {
+					if (spaceCowboyData.currentAction) {
+						spaceCowboyData.currentAction.fadeOut(0.3);
 					}
-					zombieData.idleAction.reset().fadeIn(0.3).play();
-					zombieData.currentAction = zombieData.idleAction;
+					spaceCowboyData.idleAction.reset().fadeIn(0.3).play();
+					spaceCowboyData.currentAction = spaceCowboyData.idleAction;
 				}
 			}
 
 		} else if (distanceToPlayer > ATTACK_THRESHOLD) {
-			moveDirection.subVectors(lookAtTarget, zombie.position).normalize();
+			moveDirection.subVectors(lookAtTarget, spaceCowboy.position).normalize();
 			speed = WALK_SPEED;
 			// Switch to walk animation
-			if (zombieData.walkAction) {
-				if (zombieData.currentAction !== zombieData.walkAction) {
-					if (zombieData.currentAction) {
-						zombieData.currentAction.fadeOut(0.3);
+			if (spaceCowboyData.walkAction) {
+				if (spaceCowboyData.currentAction !== spaceCowboyData.walkAction) {
+					if (spaceCowboyData.currentAction) {
+						spaceCowboyData.currentAction.fadeOut(0.3);
 					}
-					zombieData.walkAction.reset().fadeIn(0.3).play();
-					zombieData.currentAction = zombieData.walkAction;
+					spaceCowboyData.walkAction.reset().fadeIn(0.3).play();
+					spaceCowboyData.currentAction = spaceCowboyData.walkAction;
 				}
-			} else if (zombieData.idleAction) {
+			} else if (spaceCowboyData.idleAction) {
 				// Fallback to idle if no walk animation
-				if (zombieData.currentAction !== zombieData.idleAction) {
-					if (zombieData.currentAction) {
-						zombieData.currentAction.fadeOut(0.3);
+				if (spaceCowboyData.currentAction !== spaceCowboyData.idleAction) {
+					if (spaceCowboyData.currentAction) {
+						spaceCowboyData.currentAction.fadeOut(0.3);
 					}
-					zombieData.idleAction.reset().fadeIn(0.3).play();
-					zombieData.currentAction = zombieData.idleAction;
+					spaceCowboyData.idleAction.reset().fadeIn(0.3).play();
+					spaceCowboyData.currentAction = spaceCowboyData.idleAction;
 				}
 			}
 
 		} else {
 			speed = 0;
 			// Switch to idle animation
-			if (zombieData.idleAction) {
-				if (zombieData.currentAction !== zombieData.idleAction) {
-					if (zombieData.currentAction) {
-						zombieData.currentAction.fadeOut(0.3);
+			if (spaceCowboyData.idleAction) {
+				if (spaceCowboyData.currentAction !== spaceCowboyData.idleAction) {
+					if (spaceCowboyData.currentAction) {
+						spaceCowboyData.currentAction.fadeOut(0.3);
 					}
-					zombieData.idleAction.reset().fadeIn(0.3).play();
-					zombieData.currentAction = zombieData.idleAction;
+					spaceCowboyData.idleAction.reset().fadeIn(0.3).play();
+					spaceCowboyData.currentAction = spaceCowboyData.idleAction;
 				}
 			}
 		}
 
 		// --- Collision Avoidance ---
 		const avoidanceVector = new THREE.Vector3();
-		// Avoid other zombies
-		for (let j = 0; j < zombies.length; j++) {
+		// Avoid other spaceCowboys
+		for (let j = 0; j < spaceCowboys.length; j++) {
 			if (i === j) continue; // Don't check against self
 
-			const otherZombie = zombies[j];
-			// Only avoid zombies that are also alive
+			const otherZombie = spaceCowboys[j];
+			// Only avoid spaceCowboys that are also alive
 			if (otherZombie.userData.hasPlayedDeath) continue;
 
-			const distanceToOther = zombie.position.distanceTo(otherZombie.position);
+			const distanceToOther = spaceCowboy.position.distanceTo(otherZombie.position);
 
 			if (distanceToOther < AVOIDANCE_RADIUS) {
-				const awayVector = new THREE.Vector3().subVectors(zombie.position, otherZombie.position).normalize();
+				const awayVector = new THREE.Vector3().subVectors(spaceCowboy.position, otherZombie.position).normalize();
 				avoidanceVector.add(awayVector);
 			}
 		}
 
 		// Avoid obstacles (trees, houses)
 		for (const obstacle of obstacles) {
-			const distanceToObstacle = zombie.position.distanceTo(obstacle.position);
+			const distanceToObstacle = spaceCowboy.position.distanceTo(obstacle.position);
 			if (distanceToObstacle < OBSTACLE_AVOIDANCE_RADIUS) {
-				const awayVector = new THREE.Vector3().subVectors(zombie.position, obstacle.position).normalize();
+				const awayVector = new THREE.Vector3().subVectors(spaceCowboy.position, obstacle.position).normalize();
 				avoidanceVector.add(awayVector);
 			}
 		}
@@ -886,47 +1175,47 @@ function onFrame(
 		const totalMove = new THREE.Vector3().add(intendedMove).add(avoidanceMove);
 
 		// Apply the final movement
-		zombie.position.add(totalMove.multiplyScalar(delta));
+		spaceCowboy.position.add(totalMove.multiplyScalar(delta));
 	}
 	
-	// Wave-based zombie spawning system
-	if (zombieGltf) {
+	// Wave-based spaceCowboy spawning system
+	if (spaceCowboyGltf) {
 		// Check if current wave is complete
-		if (zombiesInCurrentWave >= maxZombiesPerWave && zombies.length === 0) {
+		if (spaceCowboysInCurrentWave >= maxSpaceCowboysPerWave && spaceCowboys.length === 0) {
 			// Wave complete, start next wave after delay
 			if (Date.now() - waveStartTime > timeBetweenWaves * 1000) {
 				currentWave++;
-				zombiesInCurrentWave = 0;
-				maxZombiesPerWave = Math.min(20, 5 + (currentWave - 1) * 2); // Increase difficulty
+				spaceCowboysInCurrentWave = 0;
+				maxSpaceCowboysPerWave = Math.min(20, 5 + (currentWave - 1) * 2); // Increase difficulty
 				spawnRate = Math.max(1, spawnRate - 0.1); // Faster spawning each wave
 				waveStartTime = Date.now();
-				console.log(`Starting Wave ${currentWave} with ${maxZombiesPerWave} zombies`);
+				console.log(`Starting Wave ${currentWave} with ${maxSpaceCowboysPerWave} spaceCowboys`);
 			}
 		}
 		
-		// Spawn zombies during active wave
-		if (zombiesInCurrentWave < maxZombiesPerWave && zombies.length < maxZombiesPerWave) {
+		// Spawn spaceCowboys during active wave
+		if (spaceCowboysInCurrentWave < maxSpaceCowboysPerWave && spaceCowboys.length < maxSpaceCowboysPerWave) {
 			// Check spawn timing
 			if (Math.random() < (1 / (spawnRate * 60))) { // Convert to per-frame probability
-				spawnZombie(scene);
-				zombiesInCurrentWave++;
-				console.log(`Spawned zombie ${zombiesInCurrentWave}/${maxZombiesPerWave} in wave ${currentWave}`);
+				spawnSpaceCowboy(scene);
+				spaceCowboysInCurrentWave++;
+				console.log(`Spawned spaceCowboy ${spaceCowboysInCurrentWave}/${maxSpaceCowboysPerWave} in wave ${currentWave}`);
 			}
 		}
 	}
 	
-	// Remove zombies that are too far behind
-	for (let i = zombies.length - 1; i >= 0; i--) {
-		const zombie = zombies[i];
-		if (zombie.position.z > -window.playerPosition + 15) { // 15 units behind player
+	// Remove spaceCowboys that are too far behind
+	for (let i = spaceCowboys.length - 1; i >= 0; i--) {
+		const spaceCowboy = spaceCowboys[i];
+		if (spaceCowboy.position.z > -window.playerPosition + 15) { // 15 units behind player
 			// Clear the shooting interval
-			if (zombie.userData.shootInterval) {
-				clearInterval(zombie.userData.shootInterval);
+			if (spaceCowboy.userData.shootInterval) {
+				clearInterval(spaceCowboy.userData.shootInterval);
 			}
-			scene.remove(zombie);
-			zombies.splice(i, 1);
-			if (zombieMixers[i]) {
-				zombieMixers.splice(i, 1);
+			scene.remove(spaceCowboy);
+			spaceCowboys.splice(i, 1);
+			if (spaceCowboyMixers[i]) {
+				spaceCowboyMixers.splice(i, 1);
 			}
 		}
 	}
@@ -1067,66 +1356,66 @@ function onFrame(
 
 		let bulletHit = false;
 
-		// Check collision with zombies
+		// Check collision with spaceCowboys
 		if (!bulletHit) {
-			zombies.forEach((zombie, index) => {
+			spaceCowboys.forEach((spaceCowboy, index) => {
 				if (bulletHit) {
-					console.log('Skipping zombie check - bullet already hit something');
+					console.log('Skipping spaceCowboy check - bullet already hit something');
 					return;
 				}
-				const distance = zombie.position.distanceTo(bullet.position);
+				const distance = spaceCowboy.position.distanceTo(bullet.position);
 				// Increased hitbox size for better collision detection
 				if (distance < 2.0) {
 					console.log('Zombie collision detected! Distance:', distance, 'Index:', index);
-					console.log('Zombie position:', zombie.position);
+					console.log('Zombie position:', spaceCowboy.position);
 					console.log('Bullet position:', bullet.position);
-					console.log('Zombies array length before removal:', zombies.length);
+					console.log('Zombies array length before removal:', spaceCowboys.length);
 					bulletHit = true;
 					
 					// Play death animation if available
-					const zombieData = zombieMixers[index];
-					if (zombieData && zombieData.mixer && zombie.userData && zombie.userData.deathAction && !zombie.userData.hasPlayedDeath) {
+					const spaceCowboyData = spaceCowboyMixers[index];
+					if (spaceCowboyData && spaceCowboyData.mixer && spaceCowboy.userData && spaceCowboy.userData.deathAction && !spaceCowboy.userData.hasPlayedDeath) {
 						console.log('Playing death animation in place');
-						zombie.userData.hasPlayedDeath = true;
+						spaceCowboy.userData.hasPlayedDeath = true;
 						
 						// Stop current idle animation
-						if (zombie.userData.idleAction) {
-							zombie.userData.idleAction.stop();
+						if (spaceCowboy.userData.idleAction) {
+							spaceCowboy.userData.idleAction.stop();
 						}
 						
 						// Play death animation
-						const deathAction = zombie.userData.deathAction;
+						const deathAction = spaceCowboy.userData.deathAction;
 						deathAction.setLoop(THREE.LoopOnce, 1);
 						deathAction.clampWhenFinished = true;
 						deathAction.play();
 						
-						// Remove bullet but keep zombie visible during death animation
+						// Remove bullet but keep spaceCowboy visible during death animation
 						console.log('Removing bullet from bullets object and scene');
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
 						
-						// After death animation completes, remove zombie
+						// After death animation completes, remove spaceCowboy
 						setTimeout(() => {
-							console.log('Death animation complete, removing zombie from scene');
+							console.log('Death animation complete, removing spaceCowboy from scene');
 
-							// Find the current index of the zombie, as it may have changed
-							const currentIndex = zombies.indexOf(zombie);
+							// Find the current index of the spaceCowboy, as it may have changed
+							const currentIndex = spaceCowboys.indexOf(spaceCowboy);
 							if (currentIndex === -1) {
 								// Zombie already removed, do nothing
 								return;
 							}
 
 							// Clear the shooting interval
-							if (zombie.userData.shootInterval) {
-								clearInterval(zombie.userData.shootInterval);
+							if (spaceCowboy.userData.shootInterval) {
+								clearInterval(spaceCowboy.userData.shootInterval);
 							}
 							
-							scene.remove(zombie);
-							zombies.splice(currentIndex, 1);
-							console.log('Zombies array length after removal:', zombies.length);
+							scene.remove(spaceCowboy);
+							spaceCowboys.splice(currentIndex, 1);
+							console.log('Zombies array length after removal:', spaceCowboys.length);
 							
 							// Remove corresponding mixer data at the same index
-							zombieMixers.splice(currentIndex, 1);
+							spaceCowboyMixers.splice(currentIndex, 1);
 							
 						}, 4000); // Wait 4 seconds total for death animation
 						
@@ -1136,18 +1425,18 @@ function onFrame(
 						console.log('Removing bullet from bullets object and scene');
 						delete bullets[bullet.uuid];
 						scene.remove(bullet);
-						console.log('Removing zombie from scene');
+						console.log('Removing spaceCowboy from scene');
 						// Clear the shooting interval
-						if (zombie.userData.shootInterval) {
-							clearInterval(zombie.userData.shootInterval);
+						if (spaceCowboy.userData.shootInterval) {
+							clearInterval(spaceCowboy.userData.shootInterval);
 						}
-						scene.remove(zombie);
-						zombies.splice(index, 1);
-						console.log('Zombies array length after removal:', zombies.length);
+						scene.remove(spaceCowboy);
+						spaceCowboys.splice(index, 1);
+						console.log('Zombies array length after removal:', spaceCowboys.length);
 						
 						// Remove corresponding mixer data
-						if (zombieMixers[index]) {
-							zombieMixers.splice(index, 1);
+						if (spaceCowboyMixers[index]) {
+							spaceCowboyMixers.splice(index, 1);
 						}
 					}
 
@@ -1158,17 +1447,17 @@ function onFrame(
 		}
 	});
 	
-	// Update zombie animations
-	zombieMixers.forEach(zombieData => {
-		if (zombieData.mixer) {
-			zombieData.mixer.update(delta);
+	// Update spaceCowboy animations
+	spaceCowboyMixers.forEach(spaceCowboyData => {
+		if (spaceCowboyData.mixer) {
+			spaceCowboyData.mixer.update(delta);
 		}
 	});
 	
-	// Update zombie bullets
-	if (window.zombieBullets) {
-		for (let i = window.zombieBullets.length - 1; i >= 0; i--) {
-			const bullet = window.zombieBullets[i];
+	// Update spaceCowboy bullets
+	if (window.spaceCowboyBullets) {
+		for (let i = window.spaceCowboyBullets.length - 1; i >= 0; i--) {
+			const bullet = window.spaceCowboyBullets[i];
 			
 			// Update bullet position
 			bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(delta));
@@ -1179,7 +1468,7 @@ function onFrame(
 			// Remove bullet if TTL expired
 			if (bullet.userData.timeToLive <= 0) {
 				scene.remove(bullet);
-				window.zombieBullets.splice(i, 1);
+				window.spaceCowboyBullets.splice(i, 1);
 			}
 			
 			// TODO: Add collision detection with player
@@ -1188,6 +1477,24 @@ function onFrame(
 	
 	// Update flamethrower particles
 	updateFlamethrowerParticles(delta, scene);
+	
+	// Update jetpack particles for space cowboys
+	updateJetpackParticles(delta, scene);
+	
+	// Update space environment
+	updateSpaceEnvironment(delta);
+	
+	// Spawn jetpack particles for moving space cowboys
+	spaceCowboys.forEach(spaceCowboy => {
+		if (!spaceCowboy.userData.hasPlayedDeath && Math.random() < 0.3) {
+			// Create jetpack particles
+			for (let i = 0; i < 2; i++) {
+				const particle = createJetpackParticle(spaceCowboy);
+				scene.add(particle);
+				jetpackParticles.push(particle);
+			}
+		}
+	});
 	
 	// Update power-ups
 	// Animate power-up pickups
@@ -1278,64 +1585,64 @@ function updateFlamethrowerParticles(delta, scene) {
 			);
 		}
 		
-		// Check collision with zombies
-		for (let j = zombies.length - 1; j >= 0; j--) {
-			const zombie = zombies[j];
-			if (zombie.userData.hasPlayedDeath) continue;
+		// Check collision with spaceCowboys
+		for (let j = spaceCowboys.length - 1; j >= 0; j--) {
+			const spaceCowboy = spaceCowboys[j];
+			if (spaceCowboy.userData.hasPlayedDeath) continue;
 			
-			const distance = zombie.position.distanceTo(particle.position);
+			const distance = spaceCowboy.position.distanceTo(particle.position);
 			// Smaller hitbox for flamethrower (particles are small)
 			if (distance < 1.0) {
-				// Kill the zombie
-				const zombieData = zombieMixers[j];
-				if (zombieData && zombieData.mixer && zombie.userData && zombie.userData.deathAction && !zombie.userData.hasPlayedDeath) {
+				// Kill the spaceCowboy
+				const spaceCowboyData = spaceCowboyMixers[j];
+				if (spaceCowboyData && spaceCowboyData.mixer && spaceCowboy.userData && spaceCowboy.userData.deathAction && !spaceCowboy.userData.hasPlayedDeath) {
 					console.log('Zombie hit by flamethrower! Distance:', distance);
-					zombie.userData.hasPlayedDeath = true;
+					spaceCowboy.userData.hasPlayedDeath = true;
 					
 					// Stop current idle animation
-					if (zombie.userData.idleAction) {
-						zombie.userData.idleAction.stop();
+					if (spaceCowboy.userData.idleAction) {
+						spaceCowboy.userData.idleAction.stop();
 					}
 					
 					// Play death animation
-					const deathAction = zombie.userData.deathAction;
+					const deathAction = spaceCowboy.userData.deathAction;
 					deathAction.setLoop(THREE.LoopOnce, 1);
 					deathAction.clampWhenFinished = true;
 					deathAction.play();
 					
 					// Clear the shooting interval
-					if (zombie.userData.shootInterval) {
-						clearInterval(zombie.userData.shootInterval);
+					if (spaceCowboy.userData.shootInterval) {
+						clearInterval(spaceCowboy.userData.shootInterval);
 					}
 					
 					// Increase score
 					// Score display removed - no need to update score
 					
-					// Remove the particle that hit the zombie
+					// Remove the particle that hit the spaceCowboy
 					scene.remove(particle);
 					flamethrowerParticlePool.push(particle);
 					flamethrowerParticles.splice(i, 1);
 					
-					// After death animation completes, remove zombie
+					// After death animation completes, remove spaceCowboy
 					setTimeout(() => {
-						// Find the current index of the zombie, as it may have changed
-						const currentIndex = zombies.indexOf(zombie);
+						// Find the current index of the spaceCowboy, as it may have changed
+						const currentIndex = spaceCowboys.indexOf(spaceCowboy);
 						if (currentIndex === -1) {
 							// Zombie already removed, do nothing
 							return;
 						}
 
 						// Clear the shooting interval
-						if (zombie.userData.shootInterval) {
-							clearInterval(zombie.userData.shootInterval);
+						if (spaceCowboy.userData.shootInterval) {
+							clearInterval(spaceCowboy.userData.shootInterval);
 						}
 						
-						scene.remove(zombie);
-						zombies.splice(currentIndex, 1);
-						console.log('Zombies array length after removal:', zombies.length);
+						scene.remove(spaceCowboy);
+						spaceCowboys.splice(currentIndex, 1);
+						console.log('Zombies array length after removal:', spaceCowboys.length);
 						
 						// Remove corresponding mixer data at the same index
-						zombieMixers.splice(currentIndex, 1);
+						spaceCowboyMixers.splice(currentIndex, 1);
 						
 					}, 4000); // Wait 4 seconds total for death animation
 					
