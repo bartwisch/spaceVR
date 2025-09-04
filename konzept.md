@@ -1,7 +1,7 @@
-# Space Zombie Arcade - Spielkonzept
+# Space Cowboy Arcade - Spielkonzept
 
 ## Überblick
-Ein kooperatives Arcade-Weltraum-Shooter-Spiel, bei dem 1-4 Spieler stationäre Miniguns in einem Raumschiff bedienen, um Wellen von Weltraum-Zombies abzuwehren, während sie durch prozedural generierte Level fliegen.
+Ein kooperatives Arcade-Weltraum-Shooter-Spiel, bei dem 1-4 Spieler stationäre Miniguns in einem Raumschiff bedienen, um Wellen von Space Cowboys und feindlichen Aliens abzuwehren, während sie durch prozedural generierte Weltraum-Level fliegen.
 
 ## Core Gameplay Loop
 
@@ -9,13 +9,13 @@ Ein kooperatives Arcade-Weltraum-Shooter-Spiel, bei dem 1-4 Spieler stationäre 
 - **Stationäre Turret-Positionen**: Jeder Spieler kontrolliert eine fest montierte Minigun
 - **360° Sichtfeld**: Spieler können sich umschauen und in alle Richtungen zielen
 - **Auto-Pilot Raumschiff**: Das Schiff bewegt sich automatisch durch das Level
-- **Wellen-basierte Gegner**: Zombies nähern sich aus verschiedenen Richtungen
+- **Wellen-basierte Gegner**: Space Cowboys und Aliens nähern sich aus verschiedenen Richtungen mit Jetpacks und Raumschiffen
 
 ## Spielmodi
 
 ### 1. Einzelspieler
 - Eine Minigun-Position (frontal)
-- Reduzierte Zombie-Anzahl
+- Reduzierte Gegner-Anzahl
 - KI-gesteuerte Hilfsgeschütze bei kritischen Momenten
 
 ### 2. Lokaler Koop (2-4 Spieler)
@@ -26,16 +26,22 @@ Ein kooperatives Arcade-Weltraum-Shooter-Spiel, bei dem 1-4 Spieler stationäre 
 
 ## Gegnertypen
 
-### Basis-Zombies
-1. **Walker Zombie**: Langsam, wenig HP, kommt in Gruppen
-2. **Runner Zombie**: Schnell, mittlere HP, zigzag Bewegung
-3. **Tank Zombie**: Sehr langsam, hohe HP, absorbiert Schaden
-4. **Spitter Zombie**: Mittlere Geschwindigkeit, spuckt Projektile
+### Space Cowboys
+1. **Drifter Cowboy**: Langsam mit Jetpack, wenig HP, kommt in Gruppen
+2. **Outlaw Cowboy**: Schnell mit Boost-Jetpack, mittlere HP, zigzag Flugbewegung
+3. **Sheriff Cowboy**: Gepanzert, hohe HP, schwere Laserwaffen
+4. **Gunslinger Cowboy**: Mittlere Geschwindigkeit, Dual-Blaster, Präzisionsschüsse
 
-### Boss-Zombies
-- **Mega Zombie**: Erscheint am Ende jedes Levels
-- **Swarm Mother**: Spawnt kleinere Zombies
-- **Kamikaze Zombie**: Explodiert bei Kontakt mit dem Schiff
+### Alien Feinde  
+1. **Scout Alien**: Kleine, schnelle Wesen mit Bio-Jetpacks
+2. **Warrior Alien**: Mittlere Größe, Plasmageweht, aggressiv
+3. **Broodmother Alien**: Spawnt kleinere Scout Aliens
+4. **Bomber Alien**: Explodiert bei Kontakt mit dem Schiff
+
+### Boss Gegner
+- **Alien Mothership**: Erscheint am Ende jedes Sektors
+- **Outlaw Captain**: Riesiger gepanzerter Space Cowboy mit Doppel-Miniguns
+- **Hive Queen**: Massive Alien-Königin die Schwärme spawnt
 
 ## Power-Ups System
 
@@ -62,11 +68,13 @@ graph LR
     E --> F[Warp Gate to Next Level]
 ```
 
-### Umgebungen
-1. **Asteroiden-Feld**: Zombies verstecken sich hinter Asteroiden
-2. **Verlassene Raumstation**: Enge Korridore mit vielen Angriffswinkeln
-3. **Nebula**: Eingeschränkte Sicht, Zombies erscheinen aus dem Nebel
-4. **Weltraum-Friedhof**: Zerstörte Schiffe als Deckung für Zombies
+### Weltraum-Umgebungen
+1. **Asteroiden-Feld**: Space Cowboys und Aliens verstecken sich hinter rotierenden Asteroiden
+2. **Verlassene Raumstation**: Strukturelle Deckung, Cowboys nutzen die Architektur als Schutz
+3. **Nebula-Sektor**: Eingeschränkte Sicht, Aliens materialisierten aus kosmischen Nebelschwaden
+4. **Raumschiff-Friedhof**: Zerstörte Schiffe als Deckung, Cowboys springen zwischen Wracks
+5. **Alien-Heimatwelt**: Biomechanische Strukturen, intensive Alien-Aktivität
+6. **Wilder Weltraum**: Offener Raum mit Sonnensturm-Effekten und Meteorschauern
 
 ## Progression System
 
@@ -77,10 +85,12 @@ graph LR
 - Checkpoint-System nach jedem Level
 
 ### Scoring
-- Punkte für jeden eliminierten Zombie
+- Punkte für jeden eliminierten Space Cowboy/Alien
 - Combo-Multiplikator für schnelle Kills
-- Bonus für Präzision (Headshots)
-- Team-Bonus für synchrone Kills
+- Bonus für Präzision (Kopfschüsse)
+- Extra-Punkte für Alien-Bosse und Cowboy-Sheriffs
+- Team-Bonus für synchrone Eliminierungen
+- Bonus für das Zerstören von Jetpacks (deaktiviert Beweglichkeit)
 
 ## Technische Umsetzung
 
@@ -100,24 +110,29 @@ graph TB
 ```
 
 ### Performance-Optimierung
-- Object Pooling für Zombies und Projektile
+- Object Pooling für Space Cowboys, Aliens und Projektile
 - LOD-System für entfernte Objekte
 - Frustum Culling für nicht sichtbare Elemente
-- Instanced Rendering für mehrere gleiche Zombies
+- Instanced Rendering für mehrere gleiche Gegnertypen
+- Effiziente Jetpack-Partikel-Systeme
 
 ## Audio Design
 
 ### Sound-Effekte
 - Minigun-Feuer (unterschiedliche Variationen)
-- Zombie-Geräusche (Stöhnen, Schreie)
-- Treffer-Feedback
+- Space Cowboy-Rufe und Laser-Pistolen-Geräusche ("Yeehaw!" im Weltraum)
+- Alien-Kommunikation (bioelektrische Zisch- und Klickgeräusche)
+- Jetpack-Antriebe und Boost-Effekte
+- Treffer-Feedback (Metallschäden vs. Bio-Gewebe)
 - Power-Up Aktivierung
-- Alarm bei kritischem Schiffszustand
+- Raumschiff-Warnsysteme und Alarm bei kritischem Zustand
 
 ### Musik
+- Space-Western Soundtrack mit elektronischen Elementen
 - Dynamische Intensität basierend auf Gegnerdichte
-- Boss-Kampf-Themen
-- Sieg-Fanfare
+- Epische Boss-Kampf-Themen (Alien vs. Cowboy Motive)
+- Sieg-Fanfare mit Country-Space-Fusion
+- Ambient Weltraum-Atmosphäre zwischen den Wellen
 
 ## UI/UX Design
 
@@ -147,22 +162,24 @@ graph TB
 
 ### Phase 1: Prototyp (MVP)
 - Einzelspieler-Modus
-- Eine Minigun-Position
-- Basis-Zombietypen
-- Ein prozedurales Level
+- Eine Minigun-Position auf Raumschiff
+- Basis Space Cowboys und Scout Aliens
+- Asteroiden-Feld Level
 - Grundlegende Power-Ups
+- Jetpack-Bewegungsanimationen
 
 ### Phase 2: Koop-Integration
-- Lokaler Multiplayer
-- Mehrere Turret-Positionen
-- Verbesserte Zombie-KI
-- Mehr Level-Variationen
+- Lokaler Multiplayer (2-4 Turret-Positionen)
+- Mehrere Turret-Positionen um das Raumschiff
+- Verbesserte Cowboy/Alien-KI mit Jetpack-Taktiken
+- Mehr Weltraum-Umgebungen (Nebula, Raumstationen)
 
 ### Phase 3: Content-Erweiterung
-- Boss-Kämpfe
+- Boss-Kämpfe (Alien Mothership, Outlaw Captain)
+- Alle Gegnertypen (Sheriff, Broodmother, etc.)
 - Alle Power-Up-Typen
 - Komplettes Progression-System
-- Achievements
+- Achievements und Ranglisten
 
 ### Phase 4: Polish
 - Optimierung
@@ -171,10 +188,13 @@ graph TB
 - Tutorial-Modus
 
 ## Inspiration & Referenzen
-- **Sailors Quest VR**: Stationäre Shooter-Mechanik
-- **Space Pirate Trainer**: Wave-basierte Arena
-- **Arizona Sunshine**: Zombie-Shooter in VR
+- **Space Pirate Trainer**: Wave-basierte Arena-Mechanik
+- **Sailors Quest VR**: Stationäre Turret-Shooter-Mechanik
+- **Wild West VR**: Western-Thematik in VR
 - **Galaga**: Klassische Arcade-Progression
+- **Dead Space**: Weltraum-Horror Atmosphäre
+- **Firefly/Serenity**: Space-Western Ästhetik
+- **Alien**: Xenomorph-inspiriertes Alien-Design
 
 
 Absolut. Hier ist ein detailliertes Game Design Document (GDD), das einer KI als umfassende Anleitung zur Entwicklung des WebXR-Spiels  "spaceVR" dienen kann.
