@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a WebXR tutorial project that creates an immersive game using Three.js. Players can use VR controllers or mouse controls to shoot animated cowboy enemies that spawn on both sides of a road in a 3D space station environment. The project demonstrates key WebXR concepts including controller interactions, 3D audio, haptic feedback, GLTF model loading, and dual-mode development (VR headset + desktop emulation).
+This is a WebXR project that creates an immersive spaceVR game using Three.js. Players can use VR controllers or mouse controls to shoot animated cowboy enemies that spawn on both sides of a road in a 3D space station environment. The project demonstrates key WebXR concepts including controller interactions, 3D audio, haptic feedback, GLTF model loading, and dual-mode development (VR headset + desktop emulation).
 
 ## Development Commands
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a WebXR tutorial project built with Three.js that teaches developers to create immersive VR experiences. The project is a game where players can use VR controllers or mouse controls to shoot cowboy enemies that spawn on both sides of a road in a 3D space station environment.
+This is a WebXR project built with Three.js that creates an immersive spaceVR game. The project is a game where players can use VR controllers or mouse controls to shoot cowboy enemies that spawn on both sides of a road in a 3D space station environment.
 
 ## Development Commands
 
