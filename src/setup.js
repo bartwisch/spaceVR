@@ -4,10 +4,9 @@
  */
 
 import * as THREE from 'three';
-import { init } from './init.js';
-import * as weaponsModule from './weapons.js';
 import * as environmentModule from './environment.js';
-import * as particlesModule from './particles.js';
+import * as weaponsModule from './weapons.js';
+import { init } from './init.js';
 import { onFrame } from './gameLoop.js';
 
 // Audio elements
@@ -18,7 +17,7 @@ export let flamethrowerSound;
 window.playerPosition = 0;
 window.flamethrowerSound = null;
 
-export function setupScene({ scene, camera, _renderer, player, _controllers, controls }) {
+export function setupScene({ scene, camera, _renderer, player, _controllers, controls: _controls }) {
     scene.background = new THREE.Color(0x000000);
     
     // Create space environment instead of road

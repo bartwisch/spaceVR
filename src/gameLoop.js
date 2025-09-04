@@ -3,16 +3,16 @@
  * Handles main frame update logic and controller input processing
  */
 
-import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
-import * as weaponsModule from './weapons.js';
 import * as environmentModule from './environment.js';
 import * as particlesModule from './particles.js';
+import * as weaponsModule from './weapons.js';
+import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
 
 // Main game loop function
 export function onFrame(
     delta,
     _time,
-    { scene, camera, _renderer, player, controllers }
+    { scene, _camera, _renderer, player, controllers }
 ) {
     // Update spaceship and player position
     environmentModule.updateSpaceship(delta, player);
@@ -98,7 +98,7 @@ function handleMachineGunControls(controllers, delta, time, scene) {
             // Add haptic feedback
             try {
                 controllers.left.gamepad.getHapticActuator(0).pulse(0.5, 100);
-            } catch (e) {
+            } catch {
                 // Haptic feedback not supported, ignore
             }
         }
@@ -112,7 +112,7 @@ function handleMachineGunControls(controllers, delta, time, scene) {
             // Add haptic feedback
             try {
                 controllers.right.gamepad.getHapticActuator(0).pulse(0.5, 100);
-            } catch (e) {
+            } catch {
                 // Haptic feedback not supported, ignore
             }
         }

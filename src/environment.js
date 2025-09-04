@@ -245,7 +245,7 @@ function createNebulaClouds(scene) {
     }
 }
 
-export function updateSpaceEnvironment(delta) {
+export function updateSpaceEnvironment(_delta) {
     // Rotate asteroids
     asteroids.forEach(asteroid => {
         asteroid.rotation.x += asteroid.userData.rotationSpeed.x;
@@ -296,7 +296,7 @@ export function updateSpaceship(delta, player) {
     }
 }
 
-export function updatePowerUps(scene, player, delta) {
+export function updatePowerUps(scene, player, _delta) {
     // Animate power-up pickups
     for (let i = powerUpPickups.length - 1; i >= 0; i--) {
         const powerUp = powerUpPickups[i];

@@ -4,7 +4,6 @@
  */
 
 import * as THREE from 'three';
-import { XR_AXES, XR_BUTTONS } from 'gamepad-wrapper';
 import { emitFlamethrowerParticles } from './particles.js';
 
 // Constants
