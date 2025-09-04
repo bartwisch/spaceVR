@@ -29,9 +29,10 @@ export async function init(setupScene = () => {}, onFrame = () => {}) {
 	console.log('Is mobile device:', isMobile);
 	
 	// Only use iwer for desktop development when WebXR is not available
+	let xrDevice = null;
 	if (!nativeWebXRSupport && !isMobile) {
 		console.log('Using iwer for desktop development');
-		const xrDevice = new XRDevice(metaQuest3);
+		xrDevice = new XRDevice(metaQuest3);
 		xrDevice.installRuntime();
 		xrDevice.fovy = (75 / 180) * Math.PI;
 		xrDevice.ipd = 0;
@@ -159,9 +160,51 @@ export async function init(setupScene = () => {}, onFrame = () => {}) {
 	const vrButton = VRButton.createButton(renderer);
 	console.log('VR Button created:', vrButton);
 	
-	// Add click handler for debugging
-	vrButton.addEventListener('click', () => {
-		console.log('VR Button clicked');
+	// Add session state tracking to prevent multiple sessions
+	let isSessionActive = false;
+	
+	// Override the default click handler to add session state tracking
+	const originalOnClick = vrButton.onclick;
+	vrButton.onclick = function() {
+		// Check if we're trying to start a session when one is already active
+		if (!isSessionActive && renderer.xr.isPresenting) {
+			console.warn('XR session is already active but not tracked, ending it first');
+			if (renderer.xr.getSession()) {
+				renderer.xr.getSession().end();
+			}
+			return;
+		}
+		
+		// If we have an active session, end it
+		if (isSessionActive) {
+			console.log('Ending XR session');
+			if (renderer.xr.getSession()) {
+				renderer.xr.getSession().end();
+			}
+			isSessionActive = false;
+			return;
+		}
+		
+		// If no active session, try to start one
+		console.log('Requesting XR session');
+		if (originalOnClick) {
+			try {
+				originalOnClick.call(this);
+			} catch (error) {
+				console.error('Error requesting XR session:', error);
+			}
+		}
+	};
+	
+	// Track session events
+	renderer.xr.addEventListener('sessionstart', () => {
+		console.log('XR session started');
+		isSessionActive = true;
+	});
+	
+	renderer.xr.addEventListener('sessionend', () => {
+		console.log('XR session ended');
+		isSessionActive = false;
 	});
 	
 	document.body.appendChild(vrButton);
