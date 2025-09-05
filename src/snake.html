@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>Snake Game - spaceVR</title>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0, user-scalable=no"
+		/>
+		<link rel="icon" type="image/x-icon" href="./favicon.ico">
+	</head>
+	<body>
+		<div class="header">
+			<div>
+				Snake Game -&nbsp;
+				<a href="https://github.com/bartwisch/spaceVR">GitHub</a
+				>&nbsp;|&nbsp;<a href="index.html">Back to spaceVR</a>
+			</div>
+			<div>
+				Score: <span id="score">0</span> | High Score: <span id="highScore">0</span>
+			</div>
+		</div>
+
+		<div class="game-container">
+			<canvas id="gameCanvas"></canvas>
+			<div class="game-controls">
+				<div class="instructions">
+					<h3>Instructions:</h3>
+					<ul>
+						<li>Use WASD or Arrow keys to move</li>
+						<li>Eat food (red squares) to grow</li>
+						<li>Don't hit walls or yourself!</li>
+						<li>Press SPACE to pause/resume</li>
+						<li>Press R to restart</li>
+					</ul>
+				</div>
+				<div class="mobile-controls">
+					<div class="control-row">
+						<button class="control-btn" data-direction="up">↑</button>
+					</div>
+					<div class="control-row">
+						<button class="control-btn" data-direction="left">←</button>
+						<button class="control-btn" data-direction="down">↓</button>
+						<button class="control-btn" data-direction="right">→</button>
+					</div>
+					<div class="control-row">
+						<button class="control-btn" id="pauseBtn">Pause</button>
+						<button class="control-btn" id="restartBtn">Restart</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="footer">
+			<div>
+				Copyright © Meta Platforms, Inc |
+				<a href="https://opensource.fb.com/legal/terms/">Terms</a>&nbsp;|&nbsp;
+				<a href="https://opensource.fb.com/legal/privacy/">Privacy</a>
+			</div>
+		</div>
+
+		<!-- Script is injected by HtmlWebpackPlugin -->
+	</body>
+</html>

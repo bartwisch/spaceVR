@@ -8,6 +8,15 @@ module.exports = {
 	entry: {
 		index: './src/index.js',
 		'test-cowboy': './src/test-cowboy.js',
+		snake: './src/snake.js',
+	},
+	module: {
+		rules: [
+			{
+				test: /\.css$/i,
+				use: ['style-loader', 'css-loader'],
+			},
+		],
 	},
 	resolve: {
 		alias: {
@@ -48,6 +57,11 @@ module.exports = {
 			template: './src/test-cowboy.html',
 			filename: 'test-cowboy.html',
 			chunks: ['test-cowboy'],
+		}),
+		new HtmlWebpackPlugin({
+			template: './src/snake.html',
+			filename: 'snake.html',
+			chunks: ['snake'],
 		}),
 		new CopyPlugin({
 			patterns: [
